@@ -13,15 +13,14 @@ const app = express();
 const server = http.createServer(app);
 
 const allowedOrigins = [
-  'http://localhost:5173',
-  'http://192.168.1.13:5173',
-  /^http:\/\/192\.168\.1\.\d{1,3}:5173$/
+  process.env.FRONTEND_URL || 'https://coffe-front.vercel.app',
+  'https://coffe-front.vercel.app', // Explicitly allow Vercel URL
 ];
 
 const corsOptions = {
   origin: (origin, callback) => {
-    if (!origin) return callback(null, true);
-    if (allowedOrigins.some(allowed => typeof allowed === 'string' ? allowed === origin : allowed.test(origin))) {
+    logger.info('CORS check', { origin, allowedOrigins });
+    if (!origin || allowedOrigins.includes(origin)) {
       callback(null, true);
     } else {
       logger.warn('CORS blocked', { origin });
@@ -30,7 +29,7 @@ const corsOptions = {
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'x-session-id']
+  allowedHeaders: ['Content-Type', 'Authorization', 'x-session-id'],
 };
 
 app.use(cors(corsOptions));
@@ -38,15 +37,16 @@ app.use(cors(corsOptions));
 const io = new Server(server, { cors: corsOptions });
 
 const sessionStore = new MySQLStore({
-  host: process.env.DB_HOST || 'localhost',
-  port: process.env.DB_PORT || 3306,
-  user: process.env.DB_USER || 'root',
-  password: process.env.DB_PASSWORD || '',
-  database: process.env.DB_NAME || 'coffee_ordering',
+  host: process.env.MYSQL_HOST || 'mysql-36f70339-nadderikarim-1747.f.aivencloud.com',
+  port: parseInt(process.env.MYSQL_PORT) || 10419,
+  user: process.env.MYSQL_USER || 'avnadmin',
+  password: process.env.MYSQL_PASSWORD || 'AVNS_SonSd1S5r3eXqZyL6bi',
+  database: process.env.MYSQL_DATABASE || 'defaultdb',
   clearExpired: true,
   checkExpirationInterval: 900000,
   expiration: 86400000,
-});
+  createDatabaseTable: true,
+}, db);
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -55,7 +55,7 @@ app.use(express.static(path.join(__dirname, 'public')));
 app.use(
   session({
     key: 'session_cookie_name',
-    secret: process.env.SESSION_SECRET || 'your_secret_key',
+    secret: process.env.SESSION_SECRET || 'your_secure_secret_key',
     store: sessionStore,
     resave: false,
     saveUninitialized: false,
@@ -64,6 +64,7 @@ app.use(
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
+      path: '/',
     },
   })
 );
@@ -72,8 +73,8 @@ app.use((req, res, next) => {
   logger.info('Incoming request', {
     method: req.method,
     url: req.url,
-    user: req.session.user ? req.session.user.id : 'anonymous',
-    sessionID: req.sessionID,
+    user: req.session?.user?.id || 'anonymous',
+    sessionID: req.sessionID || 'no-session',
     origin: req.headers.origin,
   });
   next();
@@ -88,7 +89,7 @@ const promotionRoutes = require('./routes/promotionRoutes');
 const analyticsRoutes = require('./routes/analyticsRoutes');
 const notificationRoutes = require('./routes/notificationRoutes');
 const bannerRoutes = require('./routes/bannerRoutes');
-const breakfastRoutes = require('./routes/breakfastRoutes'); // Added breakfast routes
+const breakfastRoutes = require('./routes/breakfastRoutes');
 
 app.use('/api', authRoutes);
 app.use('/api', menuRoutes);
@@ -98,7 +99,7 @@ app.use('/api', promotionRoutes);
 app.use('/api', analyticsRoutes);
 app.use('/api', notificationRoutes);
 app.use('/api', bannerRoutes);
-app.use('/api', breakfastRoutes); // Register breakfast routes
+app.use('/api', breakfastRoutes);
 
 // Apply validations middleware
 app.use('/api', (req, res, next) => {
@@ -113,7 +114,7 @@ app.use('/api', (req, res, next) => {
       req.path.includes('/tables') ||
       req.path.includes('/notifications') ||
       req.path.includes('/banners') ||
-      req.path.includes('/breakfasts') // Added breakfasts
+      req.path.includes('/breakfasts')
     ))
   ) {
     if (req.path.includes('/menu-items') || req.path.includes('/categories') || req.path.includes('/banners') || req.path.includes('/breakfasts')) {
@@ -158,7 +159,7 @@ app.use((err, req, res, next) => {
     stack: err.stack,
     method: req.method,
     url: req.url,
-    user: req.session.user ? req.session.user.id : 'anonymous',
+    user: req.session?.user?.id || 'anonymous',
     origin: req.headers.origin,
   });
   res.status(500).json({ error: 'Internal server error' });
@@ -168,7 +169,7 @@ app.use((req, res) => {
   logger.warn('Route not found', {
     method: req.method,
     url: req.url,
-    user: req.session.user ? req.session.user.id : 'anonymous',
+    user: req.session?.user?.id || 'anonymous',
     origin: req.headers.origin,
   });
   res.status(404).json({ error: 'Not found' });
