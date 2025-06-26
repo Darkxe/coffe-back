@@ -2,10 +2,7 @@ const express = require('express');
 const router = express.Router();
 const db = require('../config/db');
 const logger = require('../logger');
-<<<<<<< HEAD
 const jwt = require('jsonwebtoken');
-=======
->>>>>>> da8dab252f709a019c06b973c34d591887ccad2e
 const multer = require('multer');
 const path = require('path');
 
@@ -55,13 +52,8 @@ router.post('/breakfasts', logFormData, upload, async (req, res) => {
     file: image ? { name: image.filename, path: image.path } : null,
   });
   try {
-<<<<<<< HEAD
     if (!req.user || req.user.id !== parseInt(user_id) || !await checkAdmin(user_id)) {
       logger.warn('Unauthorized attempt to add breakfast', { user_id, authenticatedUser: req.user });
-=======
-    if (!req.session.user || req.session.user.id !== parseInt(user_id) || !await checkAdmin(user_id)) {
-      logger.warn('Unauthorized attempt to add breakfast', { user_id, sessionUser: req.session.user });
->>>>>>> da8dab252f709a019c06b973c34d591887ccad2e
       return res.status(403).json({ error: 'Admin access required' });
     }
     const parsedPrice = parseFloat(price);
@@ -103,13 +95,8 @@ router.put('/breakfasts/:id', logFormData, upload, async (req, res) => {
     file: image ? { name: image.filename, path: image.path } : null,
   });
   try {
-<<<<<<< HEAD
     if (!req.user || req.user.id !== parseInt(user_id) || !await checkAdmin(user_id)) {
       logger.warn('Unauthorized attempt to update breakfast', { user_id, authenticatedUser: req.user });
-=======
-    if (!req.session.user || req.session.user.id !== parseInt(user_id) || !await checkAdmin(user_id)) {
-      logger.warn('Unauthorized attempt to update breakfast', { user_id, sessionUser: req.session.user });
->>>>>>> da8dab252f709a019c06b973c34d591887ccad2e
       return res.status(403).json({ error: 'Admin access required' });
     }
     const breakfastId = parseInt(id);
@@ -158,13 +145,8 @@ router.delete('/breakfasts/:id', async (req, res) => {
   const { user_id } = req.body;
   const { id } = req.params;
   try {
-<<<<<<< HEAD
     if (!req.user || req.user.id !== parseInt(user_id) || !await checkAdmin(user_id)) {
       logger.warn('Unauthorized attempt to delete breakfast', { user_id, authenticatedUser: req.user });
-=======
-    if (!req.session.user || req.session.user.id !== parseInt(user_id) || !await checkAdmin(user_id)) {
-      logger.warn('Unauthorized attempt to delete breakfast', { user_id, sessionUser: req.session.user });
->>>>>>> da8dab252f709a019c06b973c34d591887ccad2e
       return res.status(403).json({ error: 'Admin access required' });
     }
     const breakfastId = parseInt(id);
@@ -218,13 +200,8 @@ router.get('/breakfasts/:id', async (req, res) => {
 router.post('/breakfasts/:id/option-groups', async (req, res) => {
   const { user_id, title } = req.body;
   try {
-<<<<<<< HEAD
     if (!req.user || req.user.id !== parseInt(user_id) || !await checkAdmin(user_id)) {
       logger.warn('Unauthorized attempt to add option group', { user_id, authenticatedUser: req.user });
-=======
-    if (!req.session.user || req.session.user.id !== parseInt(user_id) || !await checkAdmin(user_id)) {
-      logger.warn('Unauthorized attempt to add option group', { user_id, sessionUser: req.session.user });
->>>>>>> da8dab252f709a019c06b973c34d591887ccad2e
       return res.status(403).json({ error: 'Admin access required' });
     }
     const breakfastId = parseInt(req.params.id);
@@ -262,13 +239,8 @@ router.post('/breakfasts/:id/option-groups', async (req, res) => {
 router.put('/breakfasts/:breakfastId/option-groups/:groupId', async (req, res) => {
   const { user_id, title } = req.body;
   try {
-<<<<<<< HEAD
     if (!req.user || req.user.id !== parseInt(user_id) || !await checkAdmin(user_id)) {
       logger.warn('Unauthorized attempt to update option group', { user_id, authenticatedUser: req.user });
-=======
-    if (!req.session.user || req.session.user.id !== parseInt(user_id) || !await checkAdmin(user_id)) {
-      logger.warn('Unauthorized attempt to update option group', { user_id, sessionUser: req.session.user });
->>>>>>> da8dab252f709a019c06b973c34d591887ccad2e
       return res.status(403).json({ error: 'Admin access required' });
     }
     const breakfastId = parseInt(req.params.breakfastId);
@@ -316,23 +288,14 @@ router.put('/breakfasts/:breakfastId/option-groups/:groupId', async (req, res) =
 router.delete('/breakfasts/:breakfastId/option-groups/:groupId', async (req, res) => {
   const { user_id } = req.body;
   try {
-<<<<<<< HEAD
     if (!req.user || req.user.id !== parseInt(user_id) || !await checkAdmin(user_id)) {
       logger.warn('Unauthorized attempt to delete option group', { user_id, authenticatedUser: req.user });
-=======
-    if (!req.session.user || req.session.user.id !== parseInt(user_id) || !await checkAdmin(user_id)) {
-      logger.warn('Unauthorized attempt to delete option group', { user_id, sessionUser: req.session.user });
->>>>>>> da8dab252f709a019c06b973c34d591887ccad2e
       return res.status(403).json({ error: 'Admin access required' });
     }
     const breakfastId = parseInt(req.params.breakfastId);
     const groupId = parseInt(req.params.groupId);
     if (isNaN(breakfastId) || breakfastId <= 0) {
-<<<<<<< HEAD
       logger.warn('Invalid déjeuner ID', { id: req.params.breakfastId });
-=======
-      logger.warn('Invalid breakfast ID', { id: req.params.breakfastId });
->>>>>>> da8dab252f709a019c06b973c34d591887ccad2e
       return res.status(400).json({ error: 'Valid breakfast ID is required' });
     }
     if (isNaN(groupId) || groupId <= 0) {
@@ -383,13 +346,8 @@ router.get('/breakfasts/:id/option-groups', async (req, res) => {
 router.post('/breakfasts/:id/options', async (req, res) => {
   const { user_id, group_id, option_type, option_name, additional_price } = req.body;
   try {
-<<<<<<< HEAD
     if (!req.user || req.user.id !== parseInt(user_id) || !await checkAdmin(user_id)) {
       logger.warn('Unauthorized attempt to add breakfast option', { user_id, authenticatedUser: req.user });
-=======
-    if (!req.session.user || req.session.user.id !== parseInt(user_id) || !await checkAdmin(user_id)) {
-      logger.warn('Unauthorized attempt to add breakfast option', { user_id, sessionUser: req.session.user });
->>>>>>> da8dab252f709a019c06b973c34d591887ccad2e
       return res.status(403).json({ error: 'Admin access required' });
     }
     const breakfastId = parseInt(req.params.id);
@@ -437,13 +395,8 @@ router.post('/breakfasts/:id/options', async (req, res) => {
 router.put('/breakfasts/:breakfastId/options/:optionId', async (req, res) => {
   const { user_id, group_id, option_type, option_name, additional_price } = req.body;
   try {
-<<<<<<< HEAD
     if (!req.user || req.user.id !== parseInt(user_id) || !await checkAdmin(user_id)) {
       logger.warn('Unauthorized attempt to update breakfast option', { user_id, authenticatedUser: req.user });
-=======
-    if (!req.session.user || req.session.user.id !== parseInt(user_id) || !await checkAdmin(user_id)) {
-      logger.warn('Unauthorized attempt to update breakfast option', { user_id, sessionUser: req.session.user });
->>>>>>> da8dab252f709a019c06b973c34d591887ccad2e
       return res.status(403).json({ error: 'Admin access required' });
     }
     const breakfastId = parseInt(req.params.breakfastId);
@@ -501,13 +454,8 @@ router.put('/breakfasts/:breakfastId/options/:optionId', async (req, res) => {
 router.delete('/breakfasts/:breakfastId/options/:optionId', async (req, res) => {
   const { user_id } = req.body;
   try {
-<<<<<<< HEAD
     if (!req.user || req.user.id !== parseInt(user_id) || !await checkAdmin(user_id)) {
       logger.warn('Unauthorized attempt to delete breakfast option', { user_id, authenticatedUser: req.user });
-=======
-    if (!req.session.user || req.session.user.id !== parseInt(user_id) || !await checkAdmin(user_id)) {
-      logger.warn('Unauthorized attempt to delete breakfast option', { user_id, sessionUser: req.session.user });
->>>>>>> da8dab252f709a019c06b973c34d591887ccad2e
       return res.status(403).json({ error: 'Admin access required' });
     }
     const breakfastId = parseInt(req.params.breakfastId);
@@ -558,8 +506,4 @@ router.get('/breakfasts/:id/options', async (req, res) => {
   }
 });
 
-<<<<<<< HEAD
 module.exports = router;
-=======
-module.exports = router; 
->>>>>>> da8dab252f709a019c06b973c34d591887ccad2e
