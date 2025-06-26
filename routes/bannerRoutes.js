@@ -1,25 +1,14 @@
-<<<<<<< HEAD
-=======
-// routes/bannerRoutes.js
->>>>>>> da8dab252f709a019c06b973c34d591887ccad2e
 const express = require('express');
 const router = express.Router();
 const db = require('../config/db');
 const logger = require('../logger');
-<<<<<<< HEAD
 const jwt = require('jsonwebtoken');
-=======
->>>>>>> da8dab252f709a019c06b973c34d591887ccad2e
 const multer = require('multer');
 const path = require('path');
 
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
-<<<<<<< HEAD
     cb(null, path.join(__dirname, '..', 'public', 'Uploads'));
-=======
-    cb(null, path.join(__dirname, '..', 'public', 'uploads'));
->>>>>>> da8dab252f709a019c06b973c34d591887ccad2e
   },
   filename: (req, file, cb) => {
     cb(null, `${Date.now()}-${file.originalname}`);
@@ -50,7 +39,6 @@ router.post('/banners', upload, async (req, res) => {
   logger.info('Parsed banner creation request', {
     body: req.body,
     file: image ? { name: image.filename, path: image.path } : null,
-<<<<<<< HEAD
     authenticatedUser: req.user,
   });
   try {
@@ -64,21 +52,6 @@ router.post('/banners', upload, async (req, res) => {
     }
     if (!await checkAdmin(user_id)) {
       logger.warn('User is not admin', { user_id });
-=======
-    sessionUser: req.session.user,
-  });
-  try {
-    if (!req.session.user) {
-      logger.warn('No session user found', { user_id });
-      return res.status(403).json({ error: 'Admin access required: No session user' });
-    }
-    if (req.session.user.id !== parseInt(user_id)) {
-      logger.warn('User ID mismatch', { user_id, sessionUserId: req.session.user.id });
-      return res.status(403).json({ error: 'Admin access required: User ID mismatch' });
-    }
-    if (!await checkAdmin(user_id)) {
-      logger.warn('User is not admin', { user_id, role: req.session.user.role });
->>>>>>> da8dab252f709a019c06b973c34d591887ccad2e
       return res.status(403).json({ error: 'Admin access required: Not an admin' });
     }
     if (!link || !link.trim()) {
@@ -112,7 +85,6 @@ router.put('/banners/:id', upload, async (req, res) => {
     params: { id },
     body: req.body,
     file: image ? { name: image.filename, path: image.path } : null,
-<<<<<<< HEAD
     authenticatedUser: req.user,
   });
   try {
@@ -126,21 +98,6 @@ router.put('/banners/:id', upload, async (req, res) => {
     }
     if (!await checkAdmin(user_id)) {
       logger.warn('User is not admin', { user_id });
-=======
-    sessionUser: req.session.user,
-  });
-  try {
-    if (!req.session.user) {
-      logger.warn('No session user found', { user_id });
-      return res.status(403).json({ error: 'Admin access required: No session user' });
-    }
-    if (req.session.user.id !== parseInt(user_id)) {
-      logger.warn('User ID mismatch', { user_id, sessionUserId: req.session.user.id });
-      return res.status(403).json({ error: 'Admin access required: User ID mismatch' });
-    }
-    if (!await checkAdmin(user_id)) {
-      logger.warn('User is not admin', { user_id, role: req.session.user.role });
->>>>>>> da8dab252f709a019c06b973c34d591887ccad2e
       return res.status(403).json({ error: 'Admin access required: Not an admin' });
     }
     const bannerId = parseInt(id);
@@ -178,7 +135,6 @@ router.put('/banners/:id', upload, async (req, res) => {
 router.delete('/banners/:id', async (req, res) => {
   const { user_id } = req.body;
   const { id } = req.params;
-<<<<<<< HEAD
   logger.info('Parsed banner deletion request', { params: { id }, body: req.body, authenticatedUser: req.user });
   try {
     if (!req.user) {
@@ -191,20 +147,6 @@ router.delete('/banners/:id', async (req, res) => {
     }
     if (!await checkAdmin(user_id)) {
       logger.warn('User is not admin', { user_id });
-=======
-  logger.info('Parsed banner deletion request', { params: { id }, body: req.body, sessionUser: req.session.user });
-  try {
-    if (!req.session.user) {
-      logger.warn('No session user found', { user_id });
-      return res.status(403).json({ error: 'Admin access required: No session user' });
-    }
-    if (req.session.user.id !== parseInt(user_id)) {
-      logger.warn('User ID mismatch', { user_id, sessionUserId: req.session.user.id });
-      return res.status(403).json({ error: 'Admin access required: User ID mismatch' });
-    }
-    if (!await checkAdmin(user_id)) {
-      logger.warn('User is not admin', { user_id, role: req.session.user.role });
->>>>>>> da8dab252f709a019c06b973c34d591887ccad2e
       return res.status(403).json({ error: 'Admin access required: Not an admin' });
     }
     const bannerId = parseInt(id);
@@ -228,7 +170,6 @@ router.delete('/banners/:id', async (req, res) => {
 // Fetch all banners (admin only)
 router.get('/banners', async (req, res) => {
   const { user_id } = req.query;
-<<<<<<< HEAD
   logger.info('Parsed banners fetch request', { query: req.query, authenticatedUser: req.user });
   try {
     if (!req.user) {
@@ -241,20 +182,6 @@ router.get('/banners', async (req, res) => {
     }
     if (!await checkAdmin(user_id)) {
       logger.warn('User is not admin', { user_id });
-=======
-  logger.info('Parsed banners fetch request', { query: req.query, sessionUser: req.session.user });
-  try {
-    if (!req.session.user) {
-      logger.warn('No session user found', { user_id });
-      return res.status(403).json({ error: 'Admin access required: No session user' });
-    }
-    if (req.session.user.id !== parseInt(user_id)) {
-      logger.warn('User ID mismatch', { user_id, sessionUserId: req.session.user.id });
-      return res.status(403).json({ error: 'Admin access required: User ID mismatch' });
-    }
-    if (!await checkAdmin(user_id)) {
-      logger.warn('User is not admin', { user_id, role: req.session.user.role });
->>>>>>> da8dab252f709a019c06b973c34d591887ccad2e
       return res.status(403).json({ error: 'Admin access required: Not an admin' });
     }
     const [rows] = await db.query('SELECT id, image_url, link, is_enabled, created_at, updated_at, admin_id FROM banners');
