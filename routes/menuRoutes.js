@@ -2,10 +2,7 @@ const express = require('express');
 const router = express.Router();
 const db = require('../config/db');
 const logger = require('../logger');
-<<<<<<< HEAD
 const jwt = require('jsonwebtoken');
-=======
->>>>>>> da8dab252f709a019c06b973c34d591887ccad2e
 const multer = require('multer');
 const path = require('path');
 
@@ -57,13 +54,8 @@ router.post('/categories', logFormData, upload, async (req, res) => {
     file: image ? { name: image.filename, path: image.path } : null,
   });
   try {
-<<<<<<< HEAD
     if (!req.user || req.user.id !== parseInt(user_id) || !await checkAdmin(user_id)) {
       logger.warn('Unauthorized attempt to add category', { user_id, authenticatedUser: req.user });
-=======
-    if (!req.session.user || req.session.user.id !== parseInt(user_id) || !await checkAdmin(user_id)) {
-      logger.warn('Unauthorized attempt to add category', { user_id, sessionUser: req.session.user });
->>>>>>> da8dab252f709a019c06b973c34d591887ccad2e
       return res.status(403).json({ error: 'Admin access required' });
     }
     if (!name || !name.trim()) {
@@ -95,13 +87,8 @@ router.put('/categories/:id', logFormData, upload, async (req, res) => {
     file: image ? { name: image.filename, path: image.path } : null,
   });
   try {
-<<<<<<< HEAD
     if (!req.user || req.user.id !== parseInt(user_id) || !await checkAdmin(user_id)) {
       logger.warn('Unauthorized attempt to update category', { user_id, authenticatedUser: req.user });
-=======
-    if (!req.session.user || req.session.user.id !== parseInt(user_id) || !await checkAdmin(user_id)) {
-      logger.warn('Unauthorized attempt to update category', { user_id, sessionUser: req.session.user });
->>>>>>> da8dab252f709a019c06b973c34d591887ccad2e
       return res.status(403).json({ error: 'Admin access required' });
     }
     const categoryId = parseInt(id);
@@ -140,13 +127,8 @@ router.delete('/categories/:id', async (req, res) => {
   const { user_id } = req.body;
   const { id } = req.params;
   try {
-<<<<<<< HEAD
     if (!req.user || req.user.id !== parseInt(user_id) || !await checkAdmin(user_id)) {
       logger.warn('Unauthorized attempt to delete category', { user_id, authenticatedUser: req.user });
-=======
-    if (!req.session.user || req.session.user.id !== parseInt(user_id) || !await checkAdmin(user_id)) {
-      logger.warn('Unauthorized attempt to delete category', { user_id, sessionUser: req.session.user });
->>>>>>> da8dab252f709a019c06b973c34d591887ccad2e
       return res.status(403).json({ error: 'Admin access required' });
     }
     const categoryId = parseInt(id);
@@ -214,13 +196,8 @@ router.post('/menu-items', logFormData, upload, async (req, res) => {
     file: image ? { name: image.filename, path: image.path } : null,
   });
   try {
-<<<<<<< HEAD
     if (!req.user || req.user.id !== parseInt(user_id) || !await checkAdmin(user_id)) {
       logger.warn('Unauthorized attempt to add menu item', { user_id, authenticatedUser: req.user });
-=======
-    if (!req.session.user || req.session.user.id !== parseInt(user_id) || !await checkAdmin(user_id)) {
-      logger.warn('Unauthorized attempt to add menu item', { user_id, sessionUser: req.session.user });
->>>>>>> da8dab252f709a019c06b973c34d591887ccad2e
       return res.status(403).json({ error: 'Admin access required' });
     }
     const parsedRegularPrice = parseFloat(regular_price);
@@ -276,13 +253,8 @@ router.put('/menu-items/:id', logFormData, upload, async (req, res) => {
     file: image ? { name: image.filename, path: image.path } : null,
   });
   try {
-<<<<<<< HEAD
     if (!req.user || req.user.id !== parseInt(user_id) || !await checkAdmin(user_id)) {
       logger.warn('Unauthorized attempt to update menu item', { user_id, authenticatedUser: req.user });
-=======
-    if (!req.session.user || req.session.user.id !== parseInt(user_id) || !await checkAdmin(user_id)) {
-      logger.warn('Unauthorized attempt to update menu item', { user_id, sessionUser: req.session.user });
->>>>>>> da8dab252f709a019c06b973c34d591887ccad2e
       return res.status(403).json({ error: 'Admin access required' });
     }
     const itemId = parseInt(id);
@@ -358,13 +330,8 @@ router.delete('/menu-items/:id', async (req, res) => {
   const { user_id } = req.body;
   const { id } = req.params;
   try {
-<<<<<<< HEAD
     if (!req.user || req.user.id !== parseInt(user_id) || !await checkAdmin(user_id)) {
       logger.warn('Unauthorized attempt to delete menu item', { user_id, authenticatedUser: req.user });
-=======
-    if (!req.session.user || req.session.user.id !== parseInt(user_id) || !await checkAdmin(user_id)) {
-      logger.warn('Unauthorized attempt to delete menu item', { user_id, sessionUser: req.session.user });
->>>>>>> da8dab252f709a019c06b973c34d591887ccad2e
       return res.status(403).json({ error: 'Admin access required' });
     }
     const itemId = parseInt(id);
@@ -395,13 +362,8 @@ router.put('/menu-items/:id/availability', async (req, res) => {
   const { user_id, availability } = req.body;
   const { id } = req.params;
   try {
-<<<<<<< HEAD
     if (!req.user || req.user.id !== parseInt(user_id) || !await checkAdmin(user_id)) {
       logger.warn('Unauthorized attempt to update availability', { user_id, authenticatedUser: req.user });
-=======
-    if (!req.session.user || req.session.user.id !== parseInt(user_id) || !await checkAdmin(user_id)) {
-      logger.warn('Unauthorized attempt to update availability', { user_id, sessionUser: req.session.user });
->>>>>>> da8dab252f709a019c06b973c34d591887ccad2e
       return res.status(403).json({ error: 'Admin access required' });
     }
     const itemId = parseInt(id);
@@ -559,17 +521,10 @@ router.get('/menu-items/:id/related', async (req, res) => {
 // Create supplement
 router.post('/supplements', async (req, res) => {
   const { name, price } = req.body;
-<<<<<<< HEAD
   const user_id = req.user?.id;
   try {
     if (!user_id || !await checkAdmin(user_id)) {
       logger.warn('Unauthorized attempt to add supplement', { user_id, authenticatedUser: req.user });
-=======
-  const user_id = req.session.user?.id;
-  try {
-    if (!user_id || !await checkAdmin(user_id)) {
-      logger.warn('Unauthorized attempt to add supplement', { user_id, sessionUser: req.session.user });
->>>>>>> da8dab252f709a019c06b973c34d591887ccad2e
       return res.status(403).json({ error: 'Admin access required' });
     }
     if (!name || !price) {
@@ -598,13 +553,8 @@ router.put('/supplements/:id', async (req, res) => {
   const { user_id, name, price } = req.body;
   const { id } = req.params;
   try {
-<<<<<<< HEAD
     if (!req.user || req.user.id !== parseInt(user_id) || !await checkAdmin(user_id)) {
       logger.warn('Unauthorized attempt to update supplement', { user_id, authenticatedUser: req.user });
-=======
-    if (!req.session.user || req.session.user.id !== parseInt(user_id) || !await checkAdmin(user_id)) {
-      logger.warn('Unauthorized attempt to update supplement', { user_id, sessionUser: req.session.user });
->>>>>>> da8dab252f709a019c06b973c34d591887ccad2e
       return res.status(403).json({ error: 'Admin access required' });
     }
     const supplementId = parseInt(id);
@@ -646,7 +596,6 @@ router.put('/supplements/:id', async (req, res) => {
 router.delete('/supplements/:id', async (req, res) => {
   const { user_id } = req.body;
   try {
-<<<<<<< HEAD
     if (!req.user || req.user.id !== parseInt(user_id) || !await checkAdmin(user_id)) {
       logger.warn('Unauthorized attempt to delete supplement', { user_id, authenticatedUser: req.user });
       return res.status(403).json({ error: 'Admin access required' });
@@ -662,18 +611,6 @@ router.delete('/supplements/:id', async (req, res) => {
       return res.status(404).json({ error: 'Supplement not found' });
     }
     logger.info('Supplement deleted', { id: supplementId });
-=======
-    if (!req.session.user || req.session.user.id !== parseInt(user_id) || !await checkAdmin(user_id)) {
-      logger.warn('Unauthorized attempt to delete supplement', { user_id, sessionUser: req.session.user });
-      return res.status(403).json({ error: 'Admin access required' });
-    }
-    const [result] = await db.query('DELETE FROM supplements WHERE id = ?', [req.params.id]);
-    if (result.affectedRows === 0) {
-      logger.warn('Supplement not found', { id: req.params.id });
-      return res.status(404).json({ error: 'Supplement not found' });
-    }
-    logger.info('Supplement deleted', { id: req.params.id });
->>>>>>> da8dab252f709a019c06b973c34d591887ccad2e
     res.json({ message: 'Supplement deleted' });
   } catch (error) {
     logger.error('Error deleting supplement', { error: error.message, id });
@@ -684,17 +621,10 @@ router.delete('/supplements/:id', async (req, res) => {
 // Assign supplement to menu item
 router.post('/menu-items/:id/supplements', async (req, res) => {
   const { supplement_id, additional_price, name } = req.body;
-<<<<<<< HEAD
   const user_id = req.user?.id;
   try {
     if (!user_id || !await checkAdmin(user_id)) {
       logger.warn('Unauthorized attempt to assign supplement', { user_id, authenticatedUser: req.user });
-=======
-  const user_id = req.session.user?.id;
-  try {
-    if (!user_id || !await checkAdmin(user_id)) {
-      logger.warn('Unauthorized attempt to assign supplement', { user_id, sessionUser: req.session.user });
->>>>>>> da8dab252f709a019c06b973c34d591887ccad2e
       return res.status(403).json({ error: 'Admin access required' });
     }
     if (!supplement_id || !additional_price || !name) {
@@ -732,13 +662,8 @@ router.post('/menu-items/:id/supplements', async (req, res) => {
 router.put('/menu-items/:menuItemId/supplements/:supplementId', async (req, res) => {
   const { user_id, name, additional_price } = req.body;
   try {
-<<<<<<< HEAD
     if (!req.user || req.user.id !== parseInt(user_id) || !await checkAdmin(user_id)) {
       logger.warn('Unauthorized attempt to update supplement assignment', { user_id, authenticatedUser: req.user });
-=======
-    if (!req.session.user || req.session.user.id !== parseInt(user_id) || !await checkAdmin(user_id)) {
-      logger.warn('Unauthorized attempt to update supplement assignment', { user_id, sessionUser: req.session.user });
->>>>>>> da8dab252f709a019c06b973c34d591887ccad2e
       return res.status(403).json({ error: 'Admin access required' });
     }
     if (!name || additional_price === undefined) {
@@ -780,13 +705,8 @@ router.put('/menu-items/:menuItemId/supplements/:supplementId', async (req, res)
 router.delete('/menu-items/:menuItemId/supplements/:supplementId', async (req, res) => {
   const { user_id } = req.body;
   try {
-<<<<<<< HEAD
     if (!req.user || req.user.id !== parseInt(user_id) || !await checkAdmin(user_id)) {
       logger.warn('Unauthorized attempt to delete supplement assignment', { user_id, authenticatedUser: req.user });
-=======
-    if (!req.session.user || req.session.user.id !== parseInt(user_id) || !await checkAdmin(user_id)) {
-      logger.warn('Unauthorized attempt to delete supplement assignment', { user_id, sessionUser: req.session.user });
->>>>>>> da8dab252f709a019c06b973c34d591887ccad2e
       return res.status(403).json({ error: 'Admin access required' });
     }
     const [result] = await db.query(
@@ -835,13 +755,8 @@ router.get('/supplements', async (req, res) => {
 router.get('/supplements/:id', async (req, res) => {
   const { id } = req.params;
   try {
-<<<<<<< HEAD
     if (!req.user || !await checkAdmin(req.user.id)) {
       logger.warn('Unauthorized attempt to fetch supplement', { authenticatedUser: req.user });
-=======
-    if (!req.session.user || !await checkAdmin(req.session.user.id)) {
-      logger.warn('Unauthorized attempt to fetch supplement', { sessionUser: req.session.user });
->>>>>>> da8dab252f709a019c06b973c34d591887ccad2e
       return res.status(403).json({ error: 'Admin access required' });
     }
     const supplementId = parseInt(id);
