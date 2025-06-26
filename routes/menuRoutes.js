@@ -187,9 +187,38 @@ router.get('/categories/:id', async (req, res) => {
   }
 });
 
+// Fetch best sellers
+router.get('/menu-items/best-sellers', async (req, res) => {
+  try {
+    const [rows] = await db.query(
+      `SELECT mi.*, c.name AS category_name,
+              COALESCE(AVG(r.rating), 0) AS average_rating,
+              COUNT(r.id) AS review_count
+       FROM menu_items mi
+       LEFT JOIN categories c ON mi.category_id = c.id
+       LEFT JOIN ratings r ON mi.id = r.item_id
+       WHERE mi.is_best_seller = 1
+       GROUP BY mi.id`
+    );
+    const sanitizedRows = rows.map(item => ({
+      ...item,
+      dietary_tags: item.dietary_tags && typeof item.dietary_tags === 'string' && item.dietary_tags.match(/^\[.*\]$/)
+        ? item.dietary_tags
+        : '[]',
+      average_rating: parseFloat(item.average_rating).toFixed(1),
+      review_count: parseInt(item.review_count),
+    }));
+    logger.info('Best sellers fetched', { count: rows.length });
+    res.json(sanitizedRows);
+  } catch (error) {
+    logger.error('Error fetching best sellers', { error: error.message });
+    res.status(500).json({ error: 'Failed to fetch best sellers' });
+  }
+});
+
 // Menu item creation
 router.post('/menu-items', logFormData, upload, async (req, res) => {
-  const { user_id, name, description, regular_price, sale_price, category_id, availability, dietary_tags } = req.body;
+  const { user_id, name, description, regular_price, sale_price, category_id, availability, dietary_tags, is_best_seller } = req.body;
   const image = req.file;
   logger.info('Parsed menu item creation request', {
     body: req.body,
@@ -204,6 +233,7 @@ router.post('/menu-items', logFormData, upload, async (req, res) => {
     const parsedSalePrice = sale_price ? parseFloat(sale_price) : null;
     const parsedCategoryId = category_id ? parseInt(category_id) : null;
     const parsedAvailability = availability === 'true' || availability === true;
+    const parsedIsBestSeller = is_best_seller === 'true' || is_best_seller === true ? 1 : 0;
     let parsedDietaryTags = [];
     if (dietary_tags) {
       try {
@@ -231,10 +261,10 @@ router.post('/menu-items', logFormData, upload, async (req, res) => {
     }
     const image_url = image ? `/Uploads/${image.filename}` : null;
     const [result] = await db.query(
-      'INSERT INTO menu_items (name, description, regular_price, sale_price, category_id, image_url, availability, dietary_tags) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-      [name.trim(), description || null, parsedRegularPrice, parsedSalePrice, parsedCategoryId, image_url, parsedAvailability, JSON.stringify(parsedDietaryTags)]
+      'INSERT INTO menu_items (name, description, regular_price, sale_price, category_id, image_url, availability, dietary_tags, is_best_seller) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      [name.trim(), description || null, parsedRegularPrice, parsedSalePrice, parsedCategoryId, image_url, parsedAvailability, JSON.stringify(parsedDietaryTags), parsedIsBestSeller]
     );
-    logger.info('Menu item created', { id: result.insertId, name, image_url });
+    logger.info('Menu item created', { id: result.insertId, name, image_url, is_best_seller: parsedIsBestSeller });
     res.status(201).json({ message: 'Menu item created', id: result.insertId });
   } catch (error) {
     logger.error('Error creating menu item', { error: error.message, body: req.body });
@@ -245,7 +275,7 @@ router.post('/menu-items', logFormData, upload, async (req, res) => {
 // Menu item update
 router.put('/menu-items/:id', logFormData, upload, async (req, res) => {
   const { id } = req.params;
-  const { user_id, name, description, regular_price, sale_price, category_id, availability, dietary_tags } = req.body;
+  const { user_id, name, description, regular_price, sale_price, category_id, availability, dietary_tags, is_best_seller } = req.body;
   const image = req.file;
   logger.info('Parsed menu item update request', {
     params: { id },
@@ -262,6 +292,7 @@ router.put('/menu-items/:id', logFormData, upload, async (req, res) => {
     const parsedSalePrice = sale_price ? parseFloat(sale_price) : null;
     const parsedCategoryId = category_id ? parseInt(category_id) : null;
     const parsedAvailability = availability === 'true' || availability === true;
+    const parsedIsBestSeller = is_best_seller === 'true' || is_best_seller === true ? 1 : 0;
     let parsedDietaryTags = [];
     if (dietary_tags) {
       try {
@@ -305,8 +336,9 @@ router.put('/menu-items/:id', logFormData, upload, async (req, res) => {
       parsedCategoryId,
       parsedAvailability,
       JSON.stringify(parsedDietaryTags),
+      parsedIsBestSeller,
     ];
-    let query = 'UPDATE menu_items SET name = ?, description = ?, regular_price = ?, sale_price = ?, category_id = ?, availability = ?, dietary_tags = ?';
+    let query = 'UPDATE menu_items SET name = ?, description = ?, regular_price = ?, sale_price = ?, category_id = ?, availability = ?, dietary_tags = ?, is_best_seller = ?';
     if (image_url) {
       query += ', image_url = ?';
       updateFields.push(image_url);
@@ -317,7 +349,7 @@ router.put('/menu-items/:id', logFormData, upload, async (req, res) => {
       logger.warn('No rows updated', { id: itemId });
       return res.status(404).json({ error: 'Menu item not found' });
     }
-    logger.info('Menu item updated', { id: itemId, name, image_url });
+    logger.info('Menu item updated', { id: itemId, name, image_url, is_best_seller: parsedIsBestSeller });
     res.json({ message: 'Menu item updated' });
   } catch (error) {
     logger.error('Error updating menu item', { error: error.message, body: req.body });
