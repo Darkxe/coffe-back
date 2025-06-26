@@ -23,24 +23,13 @@ const buildTimeFilter = (startDate, endDate, tableAlias) => {
   const conditions = [];
   const params = [];
 
-<<<<<<< HEAD
-=======
-  // Convert inputs to strings and validate
->>>>>>> da8dab252f709a019c06b973c34d591887ccad2e
   const startDateStr = startDate ? String(startDate) : null;
   const endDateStr = endDate ? String(endDate) : null;
 
   if (startDateStr && startDateStr !== 'undefined') {
     try {
-<<<<<<< HEAD
       const start = new Date(startDateStr);
       if (isNaN(start.getTime())) throw new Error('Invalid start date');
-=======
-      // Parse as Date and normalize to start of day if no time provided
-      const start = new Date(startDateStr);
-      if (isNaN(start.getTime())) throw new Error('Invalid start date');
-      // If no time component (e.g., YYYY-MM-DD), set to 00:00:00
->>>>>>> da8dab252f709a019c06b973c34d591887ccad2e
       const startFormatted = startDateStr.includes('T') || startDateStr.includes(' ')
         ? start.toISOString()
         : `${startDateStr}T00:00:00.000Z`;
@@ -54,15 +43,8 @@ const buildTimeFilter = (startDate, endDate, tableAlias) => {
 
   if (endDateStr && endDateStr !== 'undefined') {
     try {
-<<<<<<< HEAD
       const end = new Date(endDateStr);
       if (isNaN(end.getTime())) throw new Error('Invalid end date');
-=======
-      // Parse as Date and normalize to end of day if no time provided
-      const end = new Date(endDateStr);
-      if (isNaN(end.getTime())) throw new Error('Invalid end date');
-      // If no time component, set to 23:59:59
->>>>>>> da8dab252f709a019c06b973c34d591887ccad2e
       const endFormatted = endDateStr.includes('T') || endDateStr.includes(' ')
         ? end.toISOString()
         : `${endDateStr}T23:59:59.999Z`;
@@ -88,17 +70,12 @@ router.get('/analytics-overview', validateQueryParams, async (req, res) => {
   const { start_date, end_date, category_id, order_type } = req.query;
 
   try {
-<<<<<<< HEAD
     if (!req.user) {
       logger.warn('No authenticated user for analytics', { query: req.query });
       return res.status(401).json({ error: 'Authentication required' });
     }
     if (!await checkAdmin(req.user.id)) {
       logger.warn('Unauthorized attempt to fetch analytics', { user: req.user });
-=======
-    if (!req.session.user || !await checkAdmin(req.session.user.id)) {
-      logger.warn('Unauthorized attempt to fetch analytics', { sessionUser: req.session.user });
->>>>>>> da8dab252f709a019c06b973c34d591887ccad2e
       return res.status(403).json({ error: 'Admin access required' });
     }
 
@@ -128,11 +105,7 @@ router.get('/analytics-overview', validateQueryParams, async (req, res) => {
         throw new Error('Invalid date range for previous period calculation');
       }
       const diff = end.getTime() - start.getTime();
-<<<<<<< HEAD
       previousEndDate = new Date(start.getTime() - 1000);
-=======
-      previousEndDate = new Date(start.getTime() - 1000); // 1 second before start
->>>>>>> da8dab252f709a019c06b973c34d591887ccad2e
       previousStartDate = new Date(previousEndDate.getTime() - diff);
     }
     const prevOrderTimeFilter = buildTimeFilter(previousStartDate, previousEndDate, 'o');
