@@ -45,7 +45,27 @@ const io = new Server(server, {
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+// Serve static files from the 'public' directory
 app.use(express.static(path.join(__dirname, 'public')));
+
+// Explicitly serve the 'uploads' directory for images
+app.use('/uploads', express.static(path.join(__dirname, 'public/uploads'), {
+  setHeaders: (res, path) => {
+    logger.info('Serving image', { path });
+    res.set('Content-Type', 'image/*'); // Ensure correct MIME type for images
+  }
+}));
+
+// Log requests to uploads for debugging
+app.use('/uploads', (req, res, next) => {
+  logger.info('Image request', {
+    method: req.method,
+    url: req.url,
+    path: path.join(__dirname, 'public/uploads', req.path)
+  });
+  next();
+});
 
 // JWT Middleware
 app.use((req, res, next) => {
@@ -122,6 +142,19 @@ app.use('/api', (req, res, next) => {
   next();
 });
 
+// Debug route to list all files in uploads directory
+app.get('/api/debug/uploads', async (req, res) => {
+  const fs = require('fs').promises;
+  try {
+    const files = await fs.readdir(path.join(__dirname, 'public/uploads'));
+    logger.info('Listing files in uploads directory', { files });
+    res.json({ files });
+  } catch (error) {
+    logger.error('Error listing uploads directory', { error: error.message });
+    res.status(500).json({ error: 'Failed to list uploads directory' });
+  }
+});
+
 function logRoutes() {
   app._router?.stack?.forEach((layer) => {
     if (layer.route) {
@@ -164,6 +197,7 @@ app.use((err, req, res, next) => {
     url: req.url,
     user: req.user ? req.user.id : 'anonymous',
     origin: req.headers.origin,
+  Ascendancy: false
   });
   res.status(500).json({ error: 'Internal server error' });
 });
