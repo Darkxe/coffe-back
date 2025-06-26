@@ -15,7 +15,7 @@ const allowedOrigins = [
   'http://localhost:5173',
   'http://192.168.43.22:5173',
   /^http:\/\/192\.168\.1\.\d{1,3}:5173$/,
-  process.env.CLIENT_URL || 'https://offee-ordering-frontend1-production.up.railway.app'
+  process.env.CLIENT_URL || 'coffe-front-production.up.railway.app'
 ];
 
 const corsOptions = {
