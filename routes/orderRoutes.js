@@ -4,7 +4,10 @@ const db = require('../config/db');
 const logger = require('../logger');
 const crypto = require('crypto');
 const { v4: uuidv4 } = require('uuid');
+<<<<<<< HEAD
 const jwt = require('jsonwebtoken');
+=======
+>>>>>>> da8dab252f709a019c06b973c34d591887ccad2e
 
 const recentRequests = new Map();
 
@@ -17,6 +20,7 @@ const checkAdminOrServer = async (userId) => {
 module.exports = (io) => {
   router.post('/orders', async (req, res) => {
     const { items, breakfastItems, total_price, order_type, delivery_address, promotion_id, table_id, request_id } = req.body;
+<<<<<<< HEAD
     const sessionId = req.headers['x-session-id'] || req.sessionID;
     const timestamp = new Date().toISOString();
 
@@ -27,26 +31,53 @@ module.exports = (io) => {
       table_id,
       supplements: items?.map(i => ({ item_id: i.item_id, supplement_id: i.supplement_id })) || [],
       sessionId,
+=======
+    const sessionID = req.headers['x-session-id'] || req.sessionID;
+    const timestamp = new Date().toISOString();
+
+    logger.info('Received order request', {
+      raw_body: req.body,
+      items: items?.length || 0,
+      breakfastItems: breakfastItems?.length || 0,
+      request_id,
+      table_id,
+      supplements: items?.map(i => ({ item_id: i.item_id, supplement_id: i.supplement_id })) || [],
+      sessionID,
+>>>>>>> da8dab252f709a019c06b973c34d591887ccad2e
       timestamp,
     });
 
     try {
+<<<<<<< HEAD
       if (!sessionId || typeof sessionId !== 'string' || !sessionId.trim()) {
         logger.warn('Invalid or missing sessionId', { sessionId, timestamp });
         return res.status(400).json({ error: 'Valid session ID is required' });
+=======
+      if (!request_id || typeof request_id !== 'string' || !request_id.match(/^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/)) {
+        logger.warn('Invalid or missing request_id', { request_id, sessionID, timestamp });
+        return res.status(400).json({ error: 'Valid request_id is required' });
+>>>>>>> da8dab252f709a019c06b973c34d591887ccad2e
       }
 
       const orderHash = crypto
         .createHash('sha256')
+<<<<<<< HEAD
         .update(JSON.stringify({ items, breakfastItems, table_id, order_type, total_price, sessionId }))
         .digest('hex');
       if (recentRequests.has(orderHash)) {
         logger.warn('Duplicate order submission detected', { sessionId, orderHash, timestamp });
+=======
+        .update(JSON.stringify({ items, breakfastItems, table_id, order_type, total_price, request_id }))
+        .digest('hex');
+      if (recentRequests.has(orderHash)) {
+        logger.warn('Duplicate order submission detected', { request_id, orderHash, sessionID, timestamp });
+>>>>>>> da8dab252f709a019c06b973c34d591887ccad2e
         return res.status(429).json({ error: 'Duplicate order detected. Please wait a moment.' });
       }
       recentRequests.set(orderHash, timestamp);
       setTimeout(() => recentRequests.delete(orderHash), 15000);
 
+<<<<<<< HEAD
       if (!items?.length && !breakfastItems?.length) {
         logger.warn('Invalid or empty items', { sessionId, timestamp });
         return res.status(400).json({ error: 'Items or breakfast items array is required and non-empty' });
@@ -61,6 +92,22 @@ module.exports = (io) => {
       }
       if (order_type === 'delivery' && (!delivery_address || !delivery_address.trim())) {
         logger.warn('Missing delivery address', { sessionId, timestamp });
+=======
+      if ((!items || !Array.isArray(items) || items.length === 0) && (!breakfastItems || !Array.isArray(breakfastItems) || breakfastItems.length === 0)) {
+        logger.warn('Invalid or empty items', { sessionID, timestamp });
+        return res.status(400).json({ error: 'Items or breakfast items array is required and non-empty' });
+      }
+      if (!order_type || !['local', 'delivery'].includes(order_type)) {
+        logger.warn('Invalid order_type', { order_type, sessionID, timestamp });
+        return res.status(400).json({ error: 'Invalid order type' });
+      }
+      if (order_type === 'local' && (!table_id || isNaN(parseInt(table_id)))) {
+        logger.warn('Invalid table_id', { table_id, sessionID, timestamp });
+        return res.status(400).json({ error: 'Table ID required for local orders' });
+      }
+      if (order_type === 'delivery' && (!delivery_address || !delivery_address.trim())) {
+        logger.warn('Missing delivery address', { sessionID, timestamp });
+>>>>>>> da8dab252f709a019c06b973c34d591887ccad2e
         return res.status(400).json({ error: 'Delivery address required' });
       }
 
@@ -70,6 +117,7 @@ module.exports = (io) => {
         for (const item of items) {
           const { item_id, quantity, unit_price, supplement_id } = item;
           if (!item_id || isNaN(item_id) || item_id <= 0) {
+<<<<<<< HEAD
             logger.warn('Invalid item_id', { item_id, sessionId, timestamp });
             return res.status(400).json({ error: `Invalid item_id: ${item_id}` });
           }
@@ -79,12 +127,27 @@ module.exports = (io) => {
           }
           if (!unit_price || isNaN(parseFloat(unit_price)) || parseFloat(unit_price) <= 0) {
             logger.warn('Invalid unit_price', { item_id, unit_price, sessionId, timestamp });
+=======
+            logger.warn('Invalid item_id', { item_id, sessionID, timestamp });
+            return res.status(400).json({ error: `Invalid item_id: ${item_id}` });
+          }
+          if (!quantity || isNaN(quantity) || quantity <= 0) {
+            logger.warn('Invalid quantity', { item_id, quantity, sessionID, timestamp });
+            return res.status(400).json({ error: `Invalid quantity for item ${item_id}` });
+          }
+          if (!unit_price || isNaN(parseFloat(unit_price)) || parseFloat(unit_price) <= 0) {
+            logger.warn('Invalid unit_price', { item_id, unit_price, sessionID, timestamp });
+>>>>>>> da8dab252f709a019c06b973c34d591887ccad2e
             return res.status(400).json({ error: `Invalid unit_price for item ${item_id}` });
           }
 
           const [menuItem] = await db.query('SELECT availability, regular_price, sale_price FROM menu_items WHERE id = ?', [item_id]);
           if (menuItem.length === 0 || !menuItem[0].availability) {
+<<<<<<< HEAD
             logger.warn('Item unavailable', { item_id, sessionId, timestamp });
+=======
+            logger.warn('Item unavailable', { item_id, sessionID, timestamp });
+>>>>>>> da8dab252f709a019c06b973c34d591887ccad2e
             return res.status(400).json({ error: `Item ${item_id} is unavailable` });
           }
           let expectedPrice = menuItem[0].sale_price !== null ? parseFloat(menuItem[0].sale_price) : parseFloat(menuItem[0].regular_price);
@@ -96,14 +159,22 @@ module.exports = (io) => {
               [item_id, supplement_id]
             );
             if (supplement.length === 0) {
+<<<<<<< HEAD
               logger.warn('Invalid supplement', { item_id, supplement_id, sessionId, timestamp });
+=======
+              logger.warn('Invalid supplement', { item_id, supplement_id, sessionID, timestamp });
+>>>>>>> da8dab252f709a019c06b973c34d591887ccad2e
               return res.status(400).json({ error: `Invalid supplement ID ${supplement_id} for item ${item_id}` });
             }
             itemTotal += parseFloat(supplement[0].additional_price);
           }
 
           if (Math.abs(parseFloat(unit_price) - itemTotal) > 0.01) {
+<<<<<<< HEAD
             logger.warn('Price mismatch', { item_id, provided: unit_price, expected: itemTotal, sessionId, timestamp });
+=======
+            logger.warn('Price mismatch', { item_id, provided: unit_price, expected: itemTotal, sessionID, timestamp });
+>>>>>>> da8dab252f709a019c06b973c34d591887ccad2e
             return res.status(400).json({ error: `Invalid unit_price for item ${item_id}. Expected ${itemTotal}, got ${unit_price}` });
           }
           calculatedTotal += itemTotal * quantity;
@@ -115,6 +186,7 @@ module.exports = (io) => {
         for (const item of breakfastItems) {
           const { breakfast_id, quantity, unit_price, option_ids } = item;
           if (!breakfast_id || isNaN(breakfast_id) || breakfast_id <= 0) {
+<<<<<<< HEAD
             logger.warn('Invalid breakfast_id', { breakfast_id, sessionId, timestamp });
             return res.status(400).json({ error: `Invalid breakfast_id: ${breakfast_id}` });
           }
@@ -124,12 +196,27 @@ module.exports = (io) => {
           }
           if (!unit_price || isNaN(parseFloat(unit_price)) || parseFloat(unit_price) <= 0) {
             logger.warn('Invalid unit_price', { breakfast_id, unit_price, sessionId, timestamp });
+=======
+            logger.warn('Invalid breakfast_id', { breakfast_id, sessionID, timestamp });
+            return res.status(400).json({ error: `Invalid breakfast_id: ${breakfast_id}` });
+          }
+          if (!quantity || isNaN(quantity) || quantity <= 0) {
+            logger.warn('Invalid quantity', { breakfast_id, quantity, sessionID, timestamp });
+            return res.status(400).json({ error: `Invalid quantity for breakfast ${breakfast_id}` });
+          }
+          if (!unit_price || isNaN(parseFloat(unit_price)) || parseFloat(unit_price) <= 0) {
+            logger.warn('Invalid unit_price', { breakfast_id, unit_price, sessionID, timestamp });
+>>>>>>> da8dab252f709a019c06b973c34d591887ccad2e
             return res.status(400).json({ error: `Invalid unit_price for breakfast ${breakfast_id}` });
           }
 
           const [breakfast] = await db.query('SELECT availability, price FROM breakfasts WHERE id = ?', [breakfast_id]);
           if (breakfast.length === 0 || !breakfast[0].availability) {
+<<<<<<< HEAD
             logger.warn('Breakfast unavailable', { breakfast_id, sessionId, timestamp });
+=======
+            logger.warn('Breakfast unavailable', { breakfast_id, sessionID, timestamp });
+>>>>>>> da8dab252f709a019c06b973c34d591887ccad2e
             return res.status(400).json({ error: `Breakfast ${breakfast_id} is unavailable` });
           }
           let expectedPrice = parseFloat(breakfast[0].price);
@@ -142,33 +229,57 @@ module.exports = (io) => {
                 [breakfast_id, option_ids]
               );
               if (options.length !== option_ids.length) {
+<<<<<<< HEAD
                 logger.warn('Invalid breakfast options', { breakfast_id, option_ids, sessionId, timestamp });
+=======
+                logger.warn('Invalid breakfast options', { breakfast_id, option_ids, sessionID, timestamp });
+>>>>>>> da8dab252f709a019c06b973c34d591887ccad2e
                 return res.status(400).json({ error: `Invalid option IDs for breakfast ${breakfast_id}` });
               }
               const selectedGroups = new Set(options.map(opt => opt.group_id));
               if (selectedGroups.size !== groups.length) {
+<<<<<<< HEAD
                 logger.warn('Missing options for groups', { breakfast_id, selectedGroups: [...selectedGroups], groupCount: groups.length, sessionId });
+=======
+                logger.warn('Missing options for groups', { breakfast_id, selectedGroups: [...selectedGroups], groupCount: groups.length, sessionID, timestamp });
+>>>>>>> da8dab252f709a019c06b973c34d591887ccad2e
                 return res.status(400).json({ error: `Must select one option from each of the ${groups.length} option groups for breakfast ${breakfast_id}` });
               }
               const optionPrice = options.reduce((sum, opt) => sum + parseFloat(opt.additional_price || 0), 0);
               expectedPrice += optionPrice;
             } else if (option_ids.length > 0) {
+<<<<<<< HEAD
               logger.warn('Options provided but no groups exist', { breakfast_id, option_ids, sessionId, timestamp });
               return res.status(400).json({ error: `No option groups defined for breakfast ${breakfast_id}, but options provided` });
             }
           } else if (option_ids && !Array.isArray(option_ids)) {
             logger.warn('Invalid option_ids format', { breakfast_id, option_ids, sessionId, timestamp });
+=======
+              logger.warn('Options provided but no groups exist', { breakfast_id, option_ids, sessionID, timestamp });
+              return res.status(400).json({ error: `No option groups defined for breakfast ${breakfast_id}, but options provided` });
+            }
+          } else if (option_ids && !Array.isArray(option_ids)) {
+            logger.warn('Invalid option_ids format', { breakfast_id, option_ids, sessionID, timestamp });
+>>>>>>> da8dab252f709a019c06b973c34d591887ccad2e
             return res.status(400).json({ error: `Option IDs for breakfast ${breakfast_id} must be an array` });
           } else {
             const [groups] = await db.query('SELECT id FROM breakfast_option_groups WHERE breakfast_id = ?', [breakfast_id]);
             if (groups.length > 0) {
+<<<<<<< HEAD
               logger.warn('No options provided but groups exist', { breakfast_id, groupCount: groups.length, sessionId, timestamp });
+=======
+              logger.warn('No options provided but groups exist', { breakfast_id, groupCount: groups.length, sessionID, timestamp });
+>>>>>>> da8dab252f709a019c06b973c34d591887ccad2e
               return res.status(400).json({ error: `Must select one option from each of the ${groups.length} option groups for breakfast ${breakfast_id}` });
             }
           }
 
           if (Math.abs(parseFloat(unit_price) - expectedPrice) > 0.01) {
+<<<<<<< HEAD
             logger.warn('Price mismatch', { breakfast_id, provided: unit_price, expected: expectedPrice, sessionId, timestamp });
+=======
+            logger.warn('Price mismatch', { breakfast_id, provided: unit_price, expected: expectedPrice, sessionID, timestamp });
+>>>>>>> da8dab252f709a019c06b973c34d591887ccad2e
             return res.status(400).json({ error: `Invalid unit_price for breakfast ${breakfast_id}. Expected ${expectedPrice}, got ${unit_price}` });
           }
 
@@ -188,12 +299,20 @@ module.exports = (io) => {
       if (table_id) {
         const [tableRows] = await db.query('SELECT id, status FROM tables WHERE id = ?', [table_id]);
         if (tableRows.length === 0) {
+<<<<<<< HEAD
           logger.warn('Invalid table', { table_id, sessionId, timestamp });
+=======
+          logger.warn('Invalid table', { table_id, sessionID, timestamp });
+>>>>>>> da8dab252f709a019c06b973c34d591887ccad2e
           return res.status(400).json({ error: 'Table does not exist' });
         }
         table = tableRows;
         if (table[0].status === 'reserved') {
+<<<<<<< HEAD
           logger.warn('Table reserved', { table_id, sessionId, timestamp });
+=======
+          logger.warn('Table reserved', { table_id, sessionID, timestamp });
+>>>>>>> da8dab252f709a019c06b973c34d591887ccad2e
           return res.status(400).json({ error: 'Table is reserved' });
         }
         if (table[0].status !== 'occupied') {
@@ -250,7 +369,11 @@ module.exports = (io) => {
 
       const providedPrice = parseFloat(total_price) || 0;
       if (Math.abs(providedPrice - calculatedTotal) > 0.01) {
+<<<<<<< HEAD
         logger.warn('Total price mismatch', { providedPrice, calculatedPrice: calculatedTotal, sessionId, timestamp });
+=======
+        logger.warn('Total price mismatch', { providedPrice, calculatedPrice: calculatedTotal, sessionID, timestamp });
+>>>>>>> da8dab252f709a019c06b973c34d591887ccad2e
         return res.status(400).json({ error: `Total price mismatch. Expected ${calculatedTotal.toFixed(2)}, got ${providedPrice.toFixed(2)}` });
       }
 
@@ -260,7 +383,11 @@ module.exports = (io) => {
       try {
         const [orderResult] = await connection.query(
           'INSERT INTO orders (total_price, order_type, delivery_address, promotion_id, table_id, session_id) VALUES (?, ?, ?, ?, ?, ?)',
+<<<<<<< HEAD
           [calculatedTotal, order_type, delivery_address || null, promotion_id || null, table_id || null, sessionId]
+=======
+          [calculatedTotal, order_type, delivery_address || null, promotion_id || null, table_id || null, sessionID]
+>>>>>>> da8dab252f709a019c06b973c34d591887ccad2e
         );
         const orderId = orderResult.insertId;
 
@@ -334,10 +461,16 @@ module.exports = (io) => {
 
         await connection.commit();
 
+<<<<<<< HEAD
         io.to('staff-notifications').emit('newOrder', orderDetails[0]);
         io.to(`guest-${sessionId}`).emit('newOrder', orderDetails[0]);
         if (table_id && table && table[0].status !== 'occupied') {
           io.to('staff-notifications').emit('tableStatusUpdate', { id: table_id, status: 'occupied' });
+=======
+        io.emit('newOrder', orderDetails[0]);
+        if (table_id && table && table[0].status !== 'occupied') {
+          io.emit('tableStatusUpdate', { id: table_id, status: 'occupied' });
+>>>>>>> da8dab252f709a019c06b973c34d591887ccad2e
         }
 
         io.to('staff-notifications').emit('newNotification', {
@@ -354,34 +487,59 @@ module.exports = (io) => {
           items: items?.length || 0,
           breakfastItems: breakfastItems?.length || 0,
           supplements: items?.map(i => ({ item_id: i.item_id, supplement_id: i.supplement_id })) || [],
+<<<<<<< HEAD
           table_id,
           total_price: calculatedTotal,
           notificationId,
           sessionId,
+=======
+          request_id,
+          table_id,
+          total_price: calculatedTotal,
+          notificationId,
+          sessionID,
+>>>>>>> da8dab252f709a019c06b973c34d591887ccad2e
           timestamp,
         });
         res.status(201).json({ message: 'Order created', orderId });
       } catch (err) {
         await connection.rollback();
+<<<<<<< HEAD
         logger.error('Error creating order in transaction', { error: err.message, table_id, sessionId, timestamp });
+=======
+        logger.error('Error creating order in transaction', { error: err.message, table_id, sessionID, timestamp });
+>>>>>>> da8dab252f709a019c06b973c34d591887ccad2e
         res.status(500).json({ error: 'Failed to create order' });
       } finally {
         connection.release();
       }
     } catch (err) {
+<<<<<<< HEAD
       logger.error('Error creating order', { error: err.message, table_id, sessionId, timestamp });
+=======
+      logger.error('Error creating order', { error: err.message, table_id, sessionID, timestamp });
+>>>>>>> da8dab252f709a019c06b973c34d591887ccad2e
       res.status(500).json({ error: 'Failed to create order' });
     }
   });
 
   router.get('/orders', async (req, res) => {
+<<<<<<< HEAD
     const sessionId = req.headers['x-session-id'] || req.sessionID;
+=======
+    const sessionID = req.headers['x-session-id'] || req.sessionID;
+>>>>>>> da8dab252f709a019c06b973c34d591887ccad2e
     const timestamp = new Date().toISOString();
     const { time_range, approved } = req.query;
 
     try {
+<<<<<<< HEAD
       if (!req.user || !await checkAdminOrServer(req.user.id)) {
         logger.warn('Unauthorized attempt to fetch orders', { authenticatedUser: req.user, sessionId, timestamp });
+=======
+      if (!req.session.user || !await checkAdminOrServer(req.session.user.id)) {
+        logger.warn('Unauthorized attempt to fetch orders', { sessionUser: req.session.user, sessionID, timestamp });
+>>>>>>> da8dab252f709a019c06b973c34d591887ccad2e
         return res.status(403).json({ error: 'Admin or server access required' });
       }
 
@@ -442,23 +600,38 @@ module.exports = (io) => {
         approved: Number(row.approved),
       }));
 
+<<<<<<< HEAD
       logger.info('Orders fetched successfully', { count: rows.length, time_range, approved, sessionId, timestamp });
       res.json({ data: formattedRows });
     } catch (err) {
       logger.error('Error fetching orders', { error: err.message, time_range, approved, sessionId, timestamp });
+=======
+      logger.info('Orders fetched successfully', { count: formattedRows.length, time_range, approved, sessionID, timestamp });
+      res.json({ data: formattedRows });
+    } catch (err) {
+      logger.error('Error fetching orders', { error: err.message, time_range, approved, sessionID, timestamp });
+>>>>>>> da8dab252f709a019c06b973c34d591887ccad2e
       res.status(500).json({ error: 'Failed to fetch orders' });
     }
   });
 
   router.get('/orders/:id', async (req, res) => {
     const { id } = req.params;
+<<<<<<< HEAD
     const sessionId = req.headers['x-session-id'] || req.sessionID;
+=======
+    const sessionID = req.headers['x-session-id'] || req.sessionID;
+>>>>>>> da8dab252f709a019c06b973c34d591887ccad2e
     const timestamp = new Date().toISOString();
 
     try {
       const orderId = parseInt(id);
       if (isNaN(orderId) || orderId <= 0) {
+<<<<<<< HEAD
         logger.warn('Invalid order ID', { orderId: id, sessionId, timestamp });
+=======
+        logger.warn('Invalid order ID', { orderId: id, sessionID, timestamp });
+>>>>>>> da8dab252f709a019c06b973c34d591887ccad2e
         return res.status(400).json({ error: 'Valid order ID required' });
       }
 
@@ -489,22 +662,34 @@ module.exports = (io) => {
       `, [orderId]);
 
       if (rows.length === 0) {
+<<<<<<< HEAD
         logger.warn('Order not found', { orderId, sessionId, timestamp });
+=======
+        logger.warn('Order not found', { orderId, sessionID, timestamp });
+>>>>>>> da8dab252f709a019c06b973c34d591887ccad2e
         return res.status(404).json({ error: 'Order not found' });
       }
 
       rows[0].approved = Number(rows[0].approved);
 
+<<<<<<< HEAD
       logger.info('Order fetched successfully', { orderId, sessionId, timestamp });
       res.json(rows[0]);
     } catch (err) {
       logger.error('Error fetching order', { error: err.message, orderId: id, sessionId, timestamp });
+=======
+      logger.info('Order fetched successfully', { orderId, sessionID, timestamp });
+      res.json(rows[0]);
+    } catch (err) {
+      logger.error('Error fetching order', { error: err.message, orderId: id, sessionID, timestamp });
+>>>>>>> da8dab252f709a019c06b973c34d591887ccad2e
       res.status(500).json({ error: 'Failed to fetch order' });
     }
   });
 
   router.put('/orders/:id', async (req, res) => {
     const { id } = req.params;
+<<<<<<< HEAD
     const { approved } = req.body;
     const sessionId = req.headers['x-session-id'] || req.sessionID;
     const timestamp = new Date().toISOString();
@@ -512,11 +697,21 @@ module.exports = (io) => {
     try {
       if (!req.user || !await checkAdminOrServer(req.user.id)) {
         logger.warn('Unauthorized attempt to update order', { authenticatedUser: req.user, sessionId, timestamp });
+=======
+    const { status } = req.body;
+    const sessionID = req.headers['x-session-id'] || req.sessionID;
+    const timestamp = new Date().toISOString();
+
+    try {
+      if (!req.session.user || !await checkAdminOrServer(req.session.user.id)) {
+        logger.warn('Unauthorized attempt to update order', { sessionUser: req.session.user.id, sessionID, timestamp });
+>>>>>>> da8dab252f709a019c06b973c34d591887ccad2e
         return res.status(403).json({ error: 'Admin or server access required' });
       }
 
       const orderId = parseInt(id);
       if (isNaN(orderId) || orderId <= 0) {
+<<<<<<< HEAD
         logger.warn('Invalid order ID', { id, sessionId, timestamp });
         return res.status(400).json({ error: 'Valid order ID required' });
       }
@@ -571,6 +766,16 @@ module.exports = (io) => {
       res.status(200).json({ message: 'Order status updated' });
     } catch (err) {
       logger.error('Error processing order update', { error: err.message, orderId: id, sessionId, timestamp });
+=======
+        logger.warn('Invalid order ID', { id, sessionID, timestamp });
+        return res.status(400).json({ error: 'Valid order ID required' });
+      }
+
+      logger.warn('Status updates not supported', { orderId, status, sessionID, timestamp });
+      return res.status(400).json({ error: 'Order status updates are not supported' });
+    } catch (err) {
+      logger.error('Error processing order update', { error: err.message, orderId: id, sessionID, timestamp });
+>>>>>>> da8dab252f709a019c06b973c34d591887ccad2e
       res.status(500).json({ error: 'Failed to process order update' });
     }
   });
@@ -578,25 +783,45 @@ module.exports = (io) => {
   router.post('/orders/:id/approve', async (req, res) => {
     const { id } = req.params;
     const timestamp = new Date().toISOString();
+<<<<<<< HEAD
     const sessionId = req.headers['x-session-id'] || req.sessionID;
 
     try {
       if (!req.user || !await checkAdminOrServer(req.user.id)) {
         logger.warn('Unauthorized attempt to approve order', { authenticatedUser: req.user, sessionId, timestamp });
+=======
+    const sessionID = req.headers['x-session-id'] || req.sessionID;
+
+    try {
+      if (!req.session.user || !await checkAdminOrServer(req.session.user.id)) {
+        logger.warn('Unauthorized attempt to approve order', { sessionUser: req.session.user.id, sessionID, timestamp });
+>>>>>>> da8dab252f709a019c06b973c34d591887ccad2e
         return res.status(403).json({ error: 'Admin or server access required' });
       }
       const orderId = parseInt(id);
       if (isNaN(orderId) || orderId <= 0) {
+<<<<<<< HEAD
         logger.warn('Invalid order ID for approval', { id, sessionId, timestamp });
+=======
+        logger.warn('Invalid order ID for approval', { id, sessionID, timestamp });
+>>>>>>> da8dab252f709a019c06b973c34d591887ccad2e
         return res.status(400).json({ error: 'Valid order ID required' });
       }
       const [orderRows] = await db.query('SELECT session_id, approved FROM orders WHERE id = ?', [orderId]);
       if (orderRows.length === 0) {
+<<<<<<< HEAD
         logger.warn('Order not found for approval', { orderId, sessionId, timestamp });
         return res.status(404).json({ error: 'Order not found' });
       }
       if (orderRows[0].approved) {
         logger.warn('Order already approved', { orderId, sessionId, timestamp });
+=======
+        logger.warn('Order not found for approval', { orderId, sessionID, timestamp });
+        return res.status(404).json({ error: 'Order not found' });
+      }
+      if (orderRows[0].approved) {
+        logger.warn('Order already approved', { orderId, sessionID, timestamp });
+>>>>>>> da8dab252f709a019c06b973c34d591887ccad2e
         return res.status(400).json({ error: 'Order already approved' });
       }
 
@@ -629,6 +854,7 @@ module.exports = (io) => {
       `, [orderId]);
 
       orderDetails[0].approved = Number(orderDetails[0].approved);
+<<<<<<< HEAD
       const derivedStatus = orderDetails[0].approved ? 'received' : 'pending';
 
       const guestSessionId = orderRows[0].session_id;
@@ -639,13 +865,29 @@ module.exports = (io) => {
       res.status(200).json({ message: 'Order approved' });
     } catch (err) {
       logger.error('Error approving order', { error: err.message, orderId: id, sessionId, timestamp });
+=======
+
+      const sessionId = orderRows[0].session_id;
+      io.to(sessionId).emit('order-approved', { orderId: orderId.toString(), orderDetails: orderDetails[0] });
+      io.emit('orderApproved', { orderId: orderId.toString(), orderDetails: orderDetails[0] });
+
+      logger.info('Order approved successfully', { orderId, sessionId, sessionID, timestamp });
+      res.status(200).json({ message: 'Order approved' });
+    } catch (err) {
+      logger.error('Error approving order', { error: err.message, orderId: id, sessionID, timestamp });
+>>>>>>> da8dab252f709a019c06b973c34d591887ccad2e
       res.status(500).json({ error: 'Failed to approve order' });
     }
   });
 
   router.get('/session', (req, res) => {
+<<<<<<< HEAD
     const sessionId = req.headers['x-session-id'] || req.sessionID;
     res.json({ sessionId });
+=======
+    const sessionID = req.headers['x-session-id'] || req.sessionID;
+    res.json({ sessionId: sessionID });
+>>>>>>> da8dab252f709a019c06b973c34d591887ccad2e
   });
 
   return router;

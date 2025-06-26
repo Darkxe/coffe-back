@@ -3,7 +3,10 @@ const router = express.Router();
 const db = require('../config/db');
 const logger = require('../logger');
 const { body, query, validationResult } = require('express-validator');
+<<<<<<< HEAD
 const jwt = require('jsonwebtoken');
+=======
+>>>>>>> da8dab252f709a019c06b973c34d591887ccad2e
 
 const checkRole = async (userId, allowedRoles = ['admin']) => {
   if (!userId) return false;
@@ -15,8 +18,13 @@ module.exports = (io) => {
   router.post('/tables', async (req, res) => {
     const { user_id, table_number, capacity } = req.body;
     try {
+<<<<<<< HEAD
       if (!req.user || req.user.id !== parseInt(user_id) || !await checkRole(user_id, ['admin'])) {
         logger.warn('Unauthorized attempt to add table', { user_id, authenticatedUser: req.user });
+=======
+      if (!req.session.user || req.session.user.id !== parseInt(user_id) || !await checkRole(user_id, ['admin'])) {
+        logger.warn('Unauthorized attempt to add table', { user_id, sessionUser: req.session.user });
+>>>>>>> da8dab252f709a019c06b973c34d591887ccad2e
         return res.status(403).json({ error: 'Admin access required' });
       }
       if (!table_number || !capacity) {
@@ -49,8 +57,13 @@ module.exports = (io) => {
     const { user_id, table_number, capacity, status, reserved_until } = req.body;
     const { id } = req.params;
     try {
+<<<<<<< HEAD
       if (!req.user || req.user.id !== parseInt(user_id) || !await checkRole(user_id, ['admin'])) {
         logger.warn('Unauthorized attempt to update table', { user_id, id, authenticatedUser: req.user });
+=======
+      if (!req.session.user || req.session.user.id !== parseInt(user_id) || !await checkRole(user_id, ['admin'])) {
+        logger.warn('Unauthorized attempt to update table', { user_id, id });
+>>>>>>> da8dab252f709a019c06b973c34d591887ccad2e
         return res.status(403).json({ error: 'Admin access required' });
       }
       if (!table_number || !capacity) {
@@ -106,8 +119,13 @@ module.exports = (io) => {
     const { user_id } = req.body;
     const { id } = req.params;
     try {
+<<<<<<< HEAD
       if (!req.user || req.user.id !== parseInt(user_id) || !await checkRole(user_id, ['admin'])) {
         logger.warn('Unauthorized attempt to delete table', { user_id, authenticatedUser: req.user });
+=======
+      if (!req.session.user || req.session.user.id !== parseInt(user_id) || !await checkRole(user_id, ['admin'])) {
+        logger.warn('Unauthorized attempt to delete table', { user_id, sessionUser: req.session.user });
+>>>>>>> da8dab252f709a019c06b973c34d591887ccad2e
         return res.status(403).json({ error: 'Admin access required' });
       }
       const tableId = parseInt(id);
@@ -131,8 +149,13 @@ module.exports = (io) => {
   router.get('/tables/:id', async (req, res) => {
     const { id } = req.params;
     try {
+<<<<<<< HEAD
       if (!req.user || !await checkRole(req.user.id, ['admin'])) {
         logger.warn('Unauthorized attempt to fetch table', { authenticatedUser: req.user });
+=======
+      if (!req.session.user || !await checkRole(req.session.user.id, ['admin'])) {
+        logger.warn('Unauthorized attempt to fetch table', { sessionUser: req.session.user });
+>>>>>>> da8dab252f709a019c06b973c34d591887ccad2e
         return res.status(403).json({ error: 'Admin access required' });
       }
       const tableId = parseInt(id);
@@ -242,8 +265,13 @@ module.exports = (io) => {
 
   router.get('/reservations', async (req, res) => {
     try {
+<<<<<<< HEAD
       if (!req.user || !await checkRole(req.user.id, ['admin', 'server'])) {
         logger.warn('Unauthorized attempt to fetch reservations', { authenticatedUser: req.user });
+=======
+      if (!req.session.user || !await checkRole(req.session.user.id, ['admin', 'server'])) {
+        logger.warn('Unauthorized attempt to fetch reservations', { sessionUser: req.session.user });
+>>>>>>> da8dab252f709a019c06b973c34d591887ccad2e
         return res.status(403).json({ error: 'Admin or staff access required' });
       }
       const [rows] = await db.query(`
@@ -262,8 +290,13 @@ module.exports = (io) => {
   router.get('/reservations/:id', async (req, res) => {
     const { id } = req.params;
     try {
+<<<<<<< HEAD
       if (!req.user || !await checkRole(req.user.id, ['admin', 'server'])) {
         logger.warn('Unauthorized attempt to fetch reservation', { authenticatedUser: req.user });
+=======
+      if (!req.session.user || !await checkRole(req.session.user.id, ['admin', 'server'])) {
+        logger.warn('Unauthorized attempt to fetch reservation', { sessionUser: req.session.user });
+>>>>>>> da8dab252f709a019c06b973c34d591887ccad2e
         return res.status(403).json({ error: 'Admin or staff access required' });
       }
       const reservationId = parseInt(id);
@@ -303,8 +336,13 @@ module.exports = (io) => {
     const { user_id, table_id, reservation_time, phone_number, status } = req.body;
     const { id } = req.params;
     try {
+<<<<<<< HEAD
       if (!req.user || req.user.id !== parseInt(user_id) || !await checkRole(user_id, ['admin', 'server'])) {
         logger.warn('Unauthorized attempt to update reservation', { user_id, authenticatedUser: req.user });
+=======
+      if (!req.session.user || req.session.user.id !== parseInt(user_id) || !await checkRole(user_id, ['admin', 'server'])) {
+        logger.warn('Unauthorized attempt to update reservation', { user_id, sessionUser: req.session.user });
+>>>>>>> da8dab252f709a019c06b973c34d591887ccad2e
         return res.status(403).json({ error: 'Admin or staff access required' });
       }
       const reservationId = parseInt(id);
@@ -386,8 +424,13 @@ module.exports = (io) => {
     const { user_id } = req.body;
     const { id } = req.params;
     try {
+<<<<<<< HEAD
       if (!req.user || req.user.id !== parseInt(user_id) || !await checkRole(user_id, ['admin', 'server'])) {
         logger.warn('Unauthorized attempt to delete reservation', { user_id, authenticatedUser: req.user });
+=======
+      if (!req.session.user || req.session.user.id !== parseInt(user_id) || !await checkRole(user_id, ['admin', 'server'])) {
+        logger.warn('Unauthorized attempt to delete reservation', { user_id, sessionUser: req.session.user });
+>>>>>>> da8dab252f709a019c06b973c34d591887ccad2e
         return res.status(403).json({ error: 'Admin or staff access required' });
       }
       const reservationId = parseInt(id);
