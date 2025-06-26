@@ -1,8 +1,9 @@
 {
   "name": "server",
   "version": "1.0.0",
-  "main": "index.js",
+  "main": "server.js",
   "scripts": {
+    "start": "node server.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
@@ -18,10 +19,7 @@
     "express-session": "^1.18.1",
     "express-validator": "^7.2.1",
     "formidable": "^3.5.4",
-<<<<<<< HEAD
     "jsonwebtoken": "^9.0.2",
-=======
->>>>>>> da8dab252f709a019c06b973c34d591887ccad2e
     "moment": "^2.30.1",
     "multer": "^2.0.0",
     "mysql2": "^3.14.1",
