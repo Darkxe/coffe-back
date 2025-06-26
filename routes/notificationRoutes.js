@@ -11,19 +11,11 @@ const checkAdminOrServer = async (userId) => {
 
 router.get('/notifications', async (req, res) => {
   const { is_read } = req.query;
-<<<<<<< HEAD
   const userId = req.user?.id; // Changed from req.session.user to req.user
   const timestamp = new Date().toISOString();
 
   try {
     if (!req.user || !(await checkAdminOrServer(userId))) {
-=======
-  const userId = req.session.user?.id;
-  const timestamp = new Date().toISOString();
-
-  try {
-    if (!(await checkAdminOrServer(userId))) {
->>>>>>> da8dab252f709a019c06b973c34d591887ccad2e
       logger.warn('Unauthorized access attempt to notifications', { userId, timestamp });
       return res.status(403).json({ error: 'Unauthorized' });
     }
@@ -53,19 +45,11 @@ router.get('/notifications', async (req, res) => {
 
 router.put('/notifications/:id/read', async (req, res) => {
   const { id } = req.params;
-<<<<<<< HEAD
   const userId = req.user?.id; // Changed from req.session.user to req.user
   const timestamp = new Date().toISOString();
 
   try {
     if (!req.user || !(await checkAdminOrServer(userId))) {
-=======
-  const userId = req.session.user?.id;
-  const timestamp = new Date().toISOString();
-
-  try {
-    if (!(await checkAdminOrServer(userId))) {
->>>>>>> da8dab252f709a019c06b973c34d591887ccad2e
       logger.warn('Unauthorized attempt to mark notification as read', { userId, notificationId: id, timestamp });
       return res.status(403).json({ error: 'Unauthorized' });
     }
@@ -90,7 +74,6 @@ router.put('/notifications/:id/read', async (req, res) => {
     res.status(500).json({ error: 'Failed to mark notification as read' });
   }
 });
-<<<<<<< HEAD
 
 router.put('/notifications/clear', async (req, res) => {
   const userId = req.user?.id; // Changed from req.session.user to req.user
@@ -98,14 +81,6 @@ router.put('/notifications/clear', async (req, res) => {
 
   try {
     if (!req.user || !(await checkAdminOrServer(userId))) {
-=======
-router.put('/notifications/clear', async (req, res) => {
-  const userId = req.session.user?.id;
-  const timestamp = new Date().toISOString();
-
-  try {
-    if (!(await checkAdminOrServer(userId))) {
->>>>>>> da8dab252f709a019c06b973c34d591887ccad2e
       logger.warn('Unauthorized attempt to clear notifications', { userId, timestamp });
       return res.status(403).json({ error: 'Unauthorized' });
     }
@@ -123,8 +98,5 @@ router.put('/notifications/clear', async (req, res) => {
     res.status(500).json({ error: 'Failed to clear notifications' });
   }
 });
-<<<<<<< HEAD
 
-=======
->>>>>>> da8dab252f709a019c06b973c34d591887ccad2e
 module.exports = router;
