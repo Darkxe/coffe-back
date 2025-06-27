@@ -7,21 +7,20 @@ const jwt = require('jsonwebtoken');
 const logger = require('./logger');
 const db = require('./config/db');
 const validate = require('./middleware/validate');
+const themeValidate = require('./middleware/themeValidate');
 
 const app = express();
 const server = http.createServer(app);
 
+// Configure allowed origins for CORS
 const allowedOrigins = [
-  'http://localhost:5173',
-  'http://192.168.43.22:5173',
-  /^http:\/\/192\.168\.1\.\d{1,3}:5173$/,
-  process.env.CLIENT_URL || 'https://coffe-front-production.up.railway.app'
+  process.env.CLIENT_URL || 'https://coffe-front-production.up.railway.app',
+  ...(process.env.NODE_ENV === 'development' ? ['http://localhost:5173'] : []),
 ];
 
 const corsOptions = {
   origin: (origin, callback) => {
-    if (!origin) return callback(null, true);
-    if (allowedOrigins.some(allowed => typeof allowed === 'string' ? allowed === origin : allowed.test(origin))) {
+    if (!origin || allowedOrigins.includes(origin)) {
       callback(null, true);
     } else {
       logger.warn('CORS blocked', { origin });
@@ -30,7 +29,7 @@ const corsOptions = {
   },
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Session-Id'],
-  credentials: true
+  credentials: true,
 };
 
 app.use(cors(corsOptions));
@@ -38,9 +37,9 @@ app.use(cors(corsOptions));
 const io = new Server(server, {
   cors: {
     ...corsOptions,
-    credentials: true
+    credentials: true,
   },
-  path: '/socket.io/'
+  path: '/socket.io/',
 });
 
 app.use(express.json());
@@ -51,21 +50,10 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 // Explicitly serve the 'uploads' directory for images
 app.use('/uploads', express.static(path.join(__dirname, 'public/uploads'), {
-  setHeaders: (res, path) => {
-    logger.info('Serving image', { path });
-    res.set('Content-Type', 'image/*'); // Ensure correct MIME type for images
-  }
+  setHeaders: (res) => {
+    res.set('Content-Type', 'image/*');
+  },
 }));
-
-// Log requests to uploads for debugging
-app.use('/uploads', (req, res, next) => {
-  logger.info('Image request', {
-    method: req.method,
-    url: req.url,
-    path: path.join(__dirname, 'public/uploads', req.path)
-  });
-  next();
-});
 
 // JWT Middleware
 app.use((req, res, next) => {
@@ -77,14 +65,12 @@ app.use((req, res, next) => {
       return next();
     }
     try {
-      const decoded = jwt.verify(token, process.env.JWT_SECRET);
+      const decoded = jwt.verify(token, process.env.JWT_SECRET || 'your_jwt_secret_key');
       req.user = decoded;
       logger.debug('JWT verified', { userId: decoded.id, email: decoded.email });
     } catch (error) {
       logger.warn('Invalid JWT', { error: error.message, token: token.substring(0, 10) + '...' });
     }
-  } else {
-    logger.debug('No token provided in request', { path: req.url });
   }
   logger.info('Incoming request', {
     method: req.method,
@@ -93,6 +79,11 @@ app.use((req, res, next) => {
     origin: req.headers.origin,
   });
   next();
+});
+
+// Health check endpoint for hosted environment
+app.get('/health', (req, res) => {
+  res.status(200).json({ status: 'OK', environment: process.env.NODE_ENV || 'production' });
 });
 
 // Routes
@@ -105,6 +96,7 @@ const analyticsRoutes = require('./routes/analyticsRoutes');
 const notificationRoutes = require('./routes/notificationRoutes');
 const bannerRoutes = require('./routes/bannerRoutes');
 const breakfastRoutes = require('./routes/breakfastRoutes');
+const themeRoutes = require('./routes/themeRoutes');
 
 app.use('/api', authRoutes);
 app.use('/api', menuRoutes);
@@ -115,6 +107,7 @@ app.use('/api', analyticsRoutes);
 app.use('/api', notificationRoutes);
 app.use('/api', bannerRoutes);
 app.use('/api', breakfastRoutes);
+app.use('/api', themeRoutes);
 
 // Apply validations middleware
 app.use('/api', (req, res, next) => {
@@ -138,22 +131,26 @@ app.use('/api', (req, res, next) => {
       }
     }
     return validate(req, res, next);
+  } else if (req.path.includes('/theme')) {
+    return themeValidate(req, res, next);
   }
   next();
 });
 
-// Debug route to list all files in uploads directory
-app.get('/api/debug/uploads', async (req, res) => {
-  const fs = require('fs').promises;
-  try {
-    const files = await fs.readdir(path.join(__dirname, 'public/uploads'));
-    logger.info('Listing files in uploads directory', { files });
-    res.json({ files });
-  } catch (error) {
-    logger.error('Error listing uploads directory', { error: error.message });
-    res.status(500).json({ error: 'Failed to list uploads directory' });
-  }
-});
+// Debug route to list all files in uploads directory (optional, disabled in production)
+if (process.env.NODE_ENV !== 'production') {
+  app.get('/api/debug/uploads', async (req, res) => {
+    const fs = require('fs').promises;
+    try {
+      const files = await fs.readdir(path.join(__dirname, 'public/uploads'));
+      logger.info('Listing files in uploads directory', { files });
+      res.json({ files });
+    } catch (error) {
+      logger.error('Error listing uploads directory', { error: error.message });
+      res.status(500).json({ error: 'Failed to list uploads directory' });
+    }
+  });
+}
 
 function logRoutes() {
   app._router?.stack?.forEach((layer) => {
@@ -181,6 +178,7 @@ function logRoutes() {
 
 logRoutes();
 
+// Error handling middleware
 app.use((err, req, res, next) => {
   if (err.code === 'ECONNABORTED') {
     logger.error('Request aborted', {
@@ -197,11 +195,11 @@ app.use((err, req, res, next) => {
     url: req.url,
     user: req.user ? req.user.id : 'anonymous',
     origin: req.headers.origin,
-  Ascendancy: false
   });
   res.status(500).json({ error: 'Internal server error' });
 });
 
+// Not found middleware
 app.use((req, res) => {
   logger.warn('Route not found', {
     method: req.method,
@@ -229,7 +227,7 @@ io.on('connection', (socket) => {
         return;
       }
       try {
-        const decoded = jwt.verify(token, process.env.JWT_SECRET);
+        const decoded = jwt.verify(token, process.env.JWT_SECRET || 'your_jwt_secret_key');
         const [rows] = await db.query('SELECT role FROM users WHERE id = ?', [decoded.id]);
         if (rows.length > 0 && ['admin', 'server'].includes(rows[0].role)) {
           socket.join('staff-notifications');
@@ -260,7 +258,7 @@ const PORT = process.env.PORT || 5000;
 server.listen(PORT, '0.0.0.0', async () => {
   try {
     await db.getConnection();
-    logger.info(`Server running on port ${PORT}`);
+    logger.info(`Server running on port ${PORT} in ${process.env.NODE_ENV || 'production'} environment`);
   } catch (error) {
     logger.error('Failed to connect to database', { error: error.message });
     process.exit(1);
