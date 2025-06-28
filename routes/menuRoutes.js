@@ -5,11 +5,18 @@ const logger = require('../logger');
 const jwt = require('jsonwebtoken');
 const multer = require('multer');
 const path = require('path');
+const fs = require('fs').promises;
+
+// Ensure upload directory exists
+const uploadDir = path.join(__dirname, '..', 'public', 'uploads');
+fs.mkdir(uploadDir, { recursive: true }).catch(err => {
+  logger.error('Failed to create uploads directory', { error: err.message });
+});
 
 // Configure multer for file uploads
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
-    cb(null, path.join(__dirname, '..', 'public', 'Uploads'));
+    cb(null, uploadDir);
   },
   filename: (req, file, cb) => {
     cb(null, `${Date.now()}-${file.originalname}`);
@@ -62,7 +69,7 @@ router.post('/categories', logFormData, upload, async (req, res) => {
       logger.warn('Missing category name', { user_id });
       return res.status(400).json({ error: 'Category name is required' });
     }
-    const image_url = image ? `/Uploads/${image.filename}` : null;
+    const image_url = image ? `/uploads/${image.filename}` : null; // Updated to lowercase
     const parsedIsTop = is_top === 'true' || is_top === true ? 1 : 0;
     const [result] = await db.query(
       'INSERT INTO categories (name, description, image_url, is_top) VALUES (?, ?, ?, ?)',
@@ -100,9 +107,22 @@ router.put('/categories/:id', logFormData, upload, async (req, res) => {
       logger.warn('Missing category name', { user_id });
       return res.status(400).json({ error: 'Category name is required' });
     }
-    const image_url = image ? `/Uploads/${image.filename}` : null;
-    const parsedIsTop = is_top === 'true' || is_top === true ? 1 : 0;
-    const updateFields = [name.trim(), description || null, parsedIsTop];
+    const image_url = image ? `/uploads/${image.filename}` : null; // Updated to lowercase
+    // Delete old image if new image is uploaded
+    if (image_url) {
+      const [existing] = await db.query('SELECT image_url FROM categories WHERE id = ?', [categoryId]);
+      if (existing.length && existing[0].image_url) {
+        const oldImagePath = path.join(__dirname, '..', 'public', existing[0].image_url.replace('/uploads/', 'Uploads/')); // Handle legacy case
+        try {
+          await fs.unlink(oldImagePath);
+        } catch (err) {
+          if (err.code !== 'ENOENT') {
+            logger.error('Error deleting old category image', { error: err.message, path: oldImagePath });
+          }
+        }
+      }
+    }
+    const updateFields = [name.trim(), description || null, is_top === 'true' || is_top === true ? 1 : 0];
     let query = 'UPDATE categories SET name = ?, description = ?, is_top = ?';
     if (image_url) {
       query += ', image_url = ?';
@@ -114,7 +134,7 @@ router.put('/categories/:id', logFormData, upload, async (req, res) => {
       logger.warn('Category not found for update', { id: categoryId });
       return res.status(404).json({ error: 'Category not found' });
     }
-    logger.info('Category updated', { id: categoryId, name, image_url, is_top: parsedIsTop });
+    logger.info('Category updated', { id: categoryId, name, image_url, is_top });
     res.json({ message: 'Category updated' });
   } catch (error) {
     logger.error('Error updating category', { error: error.message, body: req.body });
@@ -132,9 +152,22 @@ router.delete('/categories/:id', async (req, res) => {
       return res.status(403).json({ error: 'Admin access required' });
     }
     const categoryId = parseInt(id);
+    if84
     if (isNaN(categoryId) || categoryId <= 0) {
       logger.warn('Invalid category ID', { id });
       return res.status(400).json({ error: 'Valid category ID is required' });
+    }
+    // Delete associated image
+    const [existing] = await db.query('SELECT image_url FROM categories WHERE id = ?', [categoryId]);
+    if (existing.length && existing[0].image_url) {
+      const imagePath = path.join(__dirname, '..', 'public', existing[0].image_url.replace('/uploads/', 'Uploads/')); // Handle legacy case
+      try {
+        await fs.unlink(imagePath);
+      } catch (err) {
+        if (err.code !== 'ENOENT') {
+          logger.error('Error deleting category image', { error: err.message, path: imagePath });
+        }
+      }
     }
     const [result] = await db.query('DELETE FROM categories WHERE id = ?', [categoryId]);
     if (result.affectedRows === 0) {
@@ -259,7 +292,7 @@ router.post('/menu-items', logFormData, upload, async (req, res) => {
       logger.warn('Invalid sale price', { sale_price });
       return res.status(400).json({ error: 'Sale price must be a non-negative number' });
     }
-    const image_url = image ? `/Uploads/${image.filename}` : null;
+    const image_url = image ? `/uploads/${image.filename}` : null; // Updated to lowercase
     const [result] = await db.query(
       'INSERT INTO menu_items (name, description, regular_price, sale_price, category_id, image_url, availability, dietary_tags, is_best_seller) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
       [name.trim(), description || null, parsedRegularPrice, parsedSalePrice, parsedCategoryId, image_url, parsedAvailability, JSON.stringify(parsedDietaryTags), parsedIsBestSeller]
@@ -322,11 +355,22 @@ router.put('/menu-items/:id', logFormData, upload, async (req, res) => {
       logger.warn('Invalid sale price', { sale_price });
       return res.status(400).json({ error: 'Sale price must be a non-negative number' });
     }
-    const image_url = image ? `/Uploads/${image.filename}` : null;
-    const [existing] = await db.query('SELECT id FROM menu_items WHERE id = ?', [itemId]);
+    const [existing] = await db.query('SELECT image_url FROM menu_items WHERE id = ?', [itemId]);
     if (existing.length === 0) {
       logger.warn('Menu item not found', { id: itemId });
       return res.status(404).json({ error: 'Menu item not found' });
+    }
+    // Delete old image if new image is uploaded
+    const image_url = image ? `/uploads/${image.filename}` : existing[0].image_url; // Updated to lowercase
+    if (image && existing[0].image_url) {
+      const oldImagePath = path.join(__dirname, '..', 'public', existing[0].image_url.replace('/uploads/', 'Uploads/')); // Handle legacy case
+      try {
+        await fs.unlink(oldImagePath);
+      } catch (err) {
+        if (err.code !== 'ENOENT') {
+          logger.error('Error deleting old menu item image', { error: err.message, path: oldImagePath });
+        }
+      }
     }
     const updateFields = [
       name.trim(),
@@ -337,14 +381,11 @@ router.put('/menu-items/:id', logFormData, upload, async (req, res) => {
       parsedAvailability,
       JSON.stringify(parsedDietaryTags),
       parsedIsBestSeller,
+      image_url,
+      itemId,
     ];
-    let query = 'UPDATE menu_items SET name = ?, description = ?, regular_price = ?, sale_price = ?, category_id = ?, availability = ?, dietary_tags = ?, is_best_seller = ?';
-    if (image_url) {
-      query += ', image_url = ?';
-      updateFields.push(image_url);
-    }
-    updateFields.push(itemId);
-    const [result] = await db.query(query + ' WHERE id = ?', updateFields);
+    const query = 'UPDATE menu_items SET name = ?, description = ?, regular_price = ?, sale_price = ?, category_id = ?, availability = ?, dietary_tags = ?, is_best_seller = ?, image_url = ? WHERE id = ?';
+    const [result] = await db.query(query, updateFields);
     if (result.affectedRows === 0) {
       logger.warn('No rows updated', { id: itemId });
       return res.status(404).json({ error: 'Menu item not found' });
@@ -371,10 +412,21 @@ router.delete('/menu-items/:id', async (req, res) => {
       logger.warn('Invalid item ID', { id });
       return res.status(400).json({ error: 'Valid item ID is required' });
     }
-    const [existing] = await db.query('SELECT id FROM menu_items WHERE id = ?', [itemId]);
+    const [existing] = await db.query('SELECT image_url FROM menu_items WHERE id = ?', [itemId]);
     if (existing.length === 0) {
       logger.warn('Menu item not found', { id: itemId });
       return res.status(404).json({ error: 'Menu item not found' });
+    }
+    // Delete associated image
+    if (existing[0].image_url) {
+      const imagePath = path.join(__dirname, '..', 'public', existing[0].image_url.replace('/uploads/', 'Uploads/')); // Handle legacy case
+      try {
+        await fs.unlink(imagePath);
+      } catch (err) {
+        if (err.code !== 'ENOENT') {
+          logger.error('Error deleting menu item image', { error: err.message, path: imagePath });
+        }
+      }
     }
     const [result] = await db.query('DELETE FROM menu_items WHERE id = ?', [itemId]);
     if (result.affectedRows === 0) {
