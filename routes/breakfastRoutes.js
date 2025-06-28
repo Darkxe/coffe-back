@@ -5,10 +5,18 @@ const logger = require('../logger');
 const jwt = require('jsonwebtoken');
 const multer = require('multer');
 const path = require('path');
+const fs = require('fs').promises;
 
+// Ensure upload directory exists
+const uploadDir = path.join(__dirname, '..', 'public', 'uploads');
+fs.mkdir(uploadDir, { recursive: true }).catch(err => {
+  logger.error('Failed to create uploads directory', { error: err.message });
+});
+
+// Configure multer for file uploads
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
-    cb(null, path.join(__dirname, '..', 'public', 'Uploads'));
+    cb(null, uploadDir);
   },
   filename: (req, file, cb) => {
     cb(null, `${Date.now()}-${file.originalname}`);
@@ -16,7 +24,7 @@ const storage = multer.diskStorage({
 });
 const upload = multer({
   storage,
-  limits: { fileSize: 5 * 1024 * 1024 },
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
   fileFilter: (req, file, cb) => {
     if (['image/jpeg', 'image/png'].includes(file.mimetype)) {
       cb(null, true);
@@ -26,12 +34,14 @@ const upload = multer({
   },
 }).single('image');
 
+// Middleware to check admin role
 const checkAdmin = async (userId) => {
   if (!userId) return false;
   const [rows] = await db.query('SELECT role FROM users WHERE id = ?', [userId]);
   return rows.length > 0 && rows[0].role === 'admin';
 };
 
+// Middleware to log raw FormData
 const logFormData = (req, res, next) => {
   if (req.headers['content-type']?.includes('multipart/form-data')) {
     logger.info('Raw FormData request', {
@@ -71,7 +81,7 @@ router.post('/breakfasts', logFormData, upload, async (req, res) => {
       logger.warn('Invalid category ID', { category_id });
       return res.status(400).json({ error: 'Valid category ID is required' });
     }
-    const image_url = image ? `/Uploads/${image.filename}` : null;
+    const image_url = image ? `/uploads/${image.filename}` : null; // Updated to lowercase
     const [result] = await db.query(
       'INSERT INTO breakfasts (name, description, price, image_url, availability, category_id) VALUES (?, ?, ?, ?, ?, ?)',
       [name.trim(), description || null, parsedPrice, image_url, parsedAvailability, parsedCategoryId]
@@ -119,7 +129,25 @@ router.put('/breakfasts/:id', logFormData, upload, async (req, res) => {
       logger.warn('Invalid category ID', { category_id });
       return res.status(400).json({ error: 'Valid category ID is required' });
     }
-    const image_url = image ? `/Uploads/${image.filename}` : null;
+    // Check for existing breakfast and its image
+    const [existing] = await db.query('SELECT image_url FROM breakfasts WHERE id = ?', [breakfastId]);
+    if (existing.length === 0) {
+      logger.warn('Breakfast not found', { id: breakfastId });
+      return res.status(404).json({ error: 'Breakfast not found' });
+    }
+    // Delete old image if new image is uploaded
+    const image_url = image ? `/uploads/${image.filename}` : existing[0].image_url; // Updated to lowercase
+    if (image && existing[0].image_url) {
+      const oldImagePath = path.join(__dirname, '..', 'public', existing[0].image_url.replace('/uploads/', 'Uploads/')); // Handle legacy case
+      try {
+        await fs.unlink(oldImagePath);
+      } catch (err) {
+        if (err.code !== 'ENOENT') {
+          logger.error('Error deleting old breakfast image', { error: err.message, path: oldImagePath });
+        }
+      }
+    }
+    // Update breakfast
     const updateFields = [name.trim(), description || null, parsedPrice, parsedAvailability, parsedCategoryId];
     let query = 'UPDATE breakfasts SET name = ?, description = ?, price = ?, availability = ?, category_id = ?';
     if (image_url) {
@@ -129,7 +157,7 @@ router.put('/breakfasts/:id', logFormData, upload, async (req, res) => {
     updateFields.push(breakfastId);
     const [result] = await db.query(query + ' WHERE id = ?', updateFields);
     if (result.affectedRows === 0) {
-      logger.warn('Breakfast not found', { id: breakfastId });
+      logger.warn('Breakfast not found for update', { id: breakfastId });
       return res.status(404).json({ error: 'Breakfast not found' });
     }
     logger.info('Breakfast updated', { id: breakfastId, name, image_url, category_id: parsedCategoryId });
@@ -153,6 +181,18 @@ router.delete('/breakfasts/:id', async (req, res) => {
     if (isNaN(breakfastId) || breakfastId <= 0) {
       logger.warn('Invalid breakfast ID', { id });
       return res.status(400).json({ error: 'Valid breakfast ID is required' });
+    }
+    // Delete associated image
+    const [existing] = await db.query('SELECT image_url FROM breakfasts WHERE id = ?', [breakfastId]);
+    if (existing.length && existing[0].image_url) {
+      const imagePath = path.join(__dirname, '..', 'public', existing[0].image_url.replace('/uploads/', 'Uploads/')); // Handle legacy case
+      try {
+        await fs.unlink(imagePath);
+      } catch (err) {
+        if (err.code !== 'ENOENT') {
+          logger.error('Error deleting breakfast image', { error: err.message, path: imagePath });
+        }
+      }
     }
     const [result] = await db.query('DELETE FROM breakfasts WHERE id = ?', [breakfastId]);
     if (result.affectedRows === 0) {
@@ -295,7 +335,7 @@ router.delete('/breakfasts/:breakfastId/option-groups/:groupId', async (req, res
     const breakfastId = parseInt(req.params.breakfastId);
     const groupId = parseInt(req.params.groupId);
     if (isNaN(breakfastId) || breakfastId <= 0) {
-      logger.warn('Invalid déjeuner ID', { id: req.params.breakfastId });
+      logger.warn('Invalid breakfast ID', { id: req.params.breakfastId });
       return res.status(400).json({ error: 'Valid breakfast ID is required' });
     }
     if (isNaN(groupId) || groupId <= 0) {
