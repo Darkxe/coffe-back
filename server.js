@@ -8,9 +8,16 @@ const logger = require('./logger');
 const db = require('./config/db');
 const validate = require('./middleware/validate');
 const themeValidate = require('./middleware/themeValidate');
+const fs = require('fs').promises;
 
 const app = express();
 const server = http.createServer(app);
+
+// Ensure upload directory exists
+const uploadDir = path.join(__dirname, 'public', 'Uploads');
+fs.mkdir(uploadDir, { recursive: true }).catch(err => {
+  logger.error('Failed to create uploads directory', { error: err.message });
+});
 
 // Configure allowed origins for CORS
 const allowedOrigins = [
@@ -49,7 +56,7 @@ app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, 'public')));
 
 // Explicitly serve the 'uploads' directory for images
-app.use('/uploads', express.static(path.join(__dirname, 'public/uploads'), {
+app.use('/uploads', express.static(path.join(__dirname, 'public', 'Uploads'), {
   setHeaders: (res) => {
     res.set('Content-Type', 'image/*');
   },
@@ -140,9 +147,8 @@ app.use('/api', (req, res, next) => {
 // Debug route to list all files in uploads directory (optional, disabled in production)
 if (process.env.NODE_ENV !== 'production') {
   app.get('/api/debug/uploads', async (req, res) => {
-    const fs = require('fs').promises;
     try {
-      const files = await fs.readdir(path.join(__dirname, 'public/uploads'));
+      const files = await fs.readdir(uploadDir);
       logger.info('Listing files in uploads directory', { files });
       res.json({ files });
     } catch (error) {
