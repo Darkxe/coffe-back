@@ -5,10 +5,17 @@ const logger = require('../logger');
 const jwt = require('jsonwebtoken');
 const multer = require('multer');
 const path = require('path');
+const fs = require('fs').promises;
+
+// Ensure upload directory exists
+const uploadDir = path.join(__dirname, '..', 'public', 'uploads');
+fs.mkdir(uploadDir, { recursive: true }).catch(err => {
+  logger.error('Failed to create uploads directory', { error: err.message });
+});
 
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
-    cb(null, path.join(__dirname, '..', 'public', 'Uploads'));
+    cb(null, uploadDir);
   },
   filename: (req, file, cb) => {
     cb(null, `${Date.now()}-${file.originalname}`);
@@ -62,7 +69,7 @@ router.post('/banners', upload, async (req, res) => {
       logger.warn('Missing banner image', { user_id });
       return res.status(400).json({ error: 'Banner image is required' });
     }
-    const image_url = `/Uploads/${image.filename}`;
+    const image_url = `/uploads/${image.filename}`; // Updated to lowercase
     const parsedIsEnabled = is_enabled === 'true' || is_enabled === true;
     const [result] = await db.query(
       'INSERT INTO banners (image_url, link, is_enabled, admin_id) VALUES (?, ?, ?, ?)',
@@ -110,20 +117,30 @@ router.put('/banners/:id', upload, async (req, res) => {
       return res.status(400).json({ error: 'Banner link is required' });
     }
     const parsedIsEnabled = is_enabled === 'true' || is_enabled === true;
-    const updateFields = [link.trim(), parsedIsEnabled, user_id];
-    let query = 'UPDATE banners SET link = ?, is_enabled = ?, admin_id = ?';
-    if (image) {
-      const image_url = `/Uploads/${image.filename}`;
-      query += ', image_url = ?';
-      updateFields.push(image_url);
+    const [existing] = await db.query('SELECT image_url FROM banners WHERE id = ?', [bannerId]);
+    if (existing.length === 0) {
+      logger.warn('Banner not found', { id: bannerId });
+      return res.status(404).json({ error: 'Banner not found' });
     }
-    updateFields.push(bannerId);
-    const [result] = await db.query(query + ' WHERE id = ?', updateFields);
+    const image_url = image ? `/uploads/${image.filename}` : existing[0].image_url; // Updated to lowercase
+    if (image && existing[0].image_url) {
+      const oldImagePath = path.join(__dirname, '..', 'public', existing[0].image_url.replace('/uploads/', 'Uploads/')); // Handle legacy case
+      try {
+        await fs.unlink(oldImagePath);
+      } catch (err) {
+        if (err.code !== 'ENOENT') {
+          logger.error('Error deleting old banner image', { error: err.message, path: oldImagePath });
+        }
+      }
+    }
+    const updateFields = [link.trim(), parsedIsEnabled, user_id, image_url, bannerId];
+    const query = 'UPDATE banners SET link = ?, is_enabled = ?, admin_id = ?, image_url = ? WHERE id = ?';
+    const [result] = await db.query(query, updateFields);
     if (result.affectedRows === 0) {
       logger.warn('Banner not found for update', { id: bannerId });
       return res.status(404).json({ error: 'Banner not found' });
     }
-    logger.info('Banner updated', { id: bannerId, link });
+    logger.info('Banner updated', { id: bannerId, link, image_url });
     res.json({ message: 'Banner updated' });
   } catch (error) {
     logger.error('Error updating banner', { error: error.message, body: req.body });
@@ -153,6 +170,17 @@ router.delete('/banners/:id', async (req, res) => {
     if (isNaN(bannerId) || bannerId <= 0) {
       logger.warn('Invalid banner ID', { id });
       return res.status(400).json({ error: 'Valid banner ID is required' });
+    }
+    const [existing] = await db.query('SELECT image_url FROM banners WHERE id = ?', [bannerId]);
+    if (existing.length && existing[0].image_url) {
+      const imagePath = path.join(__dirname, '..', 'public', existing[0].image_url.replace('/uploads/', 'Uploads/')); // Handle legacy case
+      try {
+        await fs.unlink(imagePath);
+      } catch (err) {
+        if (err.code !== 'ENOENT') {
+          logger.error('Error deleting banner image', { error: err.message, path: imagePath });
+        }
+      }
     }
     const [result] = await db.query('DELETE FROM banners WHERE id = ?', [bannerId]);
     if (result.affectedRows === 0) {
