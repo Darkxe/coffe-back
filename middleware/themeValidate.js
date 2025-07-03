@@ -7,25 +7,35 @@ const themeValidate = (req, res, next) => {
   if (req.method === 'PUT' && req.path.includes('/theme')) {
     validations.push(
       body('primary_color')
+        .optional()
         .isString()
         .trim()
         .matches(/^#[0-9A-Fa-f]{6}$/)
         .withMessage('Primary color must be a valid hex color code (e.g., #ff6b35)'),
       body('secondary_color')
+        .optional()
         .isString()
         .trim()
         .matches(/^#[0-9A-Fa-f]{6}$/)
         .withMessage('Secondary color must be a valid hex color code (e.g., #ff8c42)'),
       body('background_color')
+        .optional()
         .isString()
         .trim()
         .matches(/^#[0-9A-Fa-f]{6}$/)
         .withMessage('Background color must be a valid hex color code (e.g., #faf8f5)'),
       body('text_color')
+        .optional()
         .isString()
         .trim()
         .matches(/^#[0-9A-Fa-f]{6}$/)
-        .withMessage('Text color must be a valid hex color code (e.g., #1f2937)')
+        .withMessage('Text color must be a valid hex color code (e.g., #1f2937)'),
+      body('site_title')
+        .optional()
+        .isString()
+        .trim()
+        .isLength({ max: 100 })
+        .withMessage('Site title must be a string with a maximum length of 100 characters')
     );
   }
 
