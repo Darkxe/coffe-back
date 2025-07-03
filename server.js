@@ -9,20 +9,48 @@ const db = require('./config/db');
 const validate = require('./middleware/validate');
 const themeValidate = require('./middleware/themeValidate');
 const fs = require('fs').promises;
+const multer = require('multer'); // Add multer for file uploads
 
 const app = express();
 const server = http.createServer(app);
 
-// Ensure upload directory exists
-const uploadDir = path.join(__dirname, 'public', 'Uploads');
+// Ensure upload directory exists (use lowercase 'uploads' to match themeRoutes.js)
+const uploadDir = path.join(__dirname, 'public', 'uploads');
 fs.mkdir(uploadDir, { recursive: true }).catch(err => {
   logger.error('Failed to create uploads directory', { error: err.message });
 });
 
+// Configure multer for file uploads
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, 'public/Uploads/');
+  },
+  filename: (req, file, cb) => {
+    const ext = path.extname(file.originalname);
+    cb(null, `${file.fieldname}-${Date.now()}${ext}`);
+  },
+});
+const upload = multer({
+  storage,
+  fileFilter: (req, file, cb) => {
+    const filetypes = /jpeg|jpg|png|ico/;
+    const extname = filetypes.test(path.extname(file.originalname).toLowerCase());
+    const mimetype = filetypes.test(file.mimetype);
+    if (extname && mimetype) {
+      return cb(null, true);
+    }
+    cb(new Error('Only .jpg, .jpeg, .png, and .ico files are allowed'));
+  },
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
+});
+
+// Make multer available to routes
+app.set('upload', upload);
+
 // Configure allowed origins for CORS
 const allowedOrigins = [
   process.env.CLIENT_URL || 'https://coffe-front-production.up.railway.app',
-  ...(process.env.NODE_ENV === 'development' ? ['http://localhost:5173'] : []),
+  ...(process.env.NODE_ENV === 'development' ? ['http://localhost:5173', 'http://192.168.1.6:5173'] : []),
 ];
 
 const corsOptions = {
@@ -55,10 +83,11 @@ app.use(express.urlencoded({ extended: true }));
 // Serve static files from the 'public' directory
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Explicitly serve the 'uploads' directory for images
-app.use('/uploads', express.static(path.join(__dirname, 'public', 'Uploads'), {
+// Explicitly serve the 'Uploads' directory for images
+app.use('/Uploads', express.static(path.join(__dirname, 'public', 'Uploads'), {
   setHeaders: (res) => {
     res.set('Content-Type', 'image/*');
+    res.set('Cache-Control', 'no-cache, no-store, must-revalidate');
   },
 }));
 
