@@ -20,16 +20,17 @@ fs.mkdir(uploadDir, { recursive: true }).catch(err => {
   logger.error('Failed to create uploads directory', { error: err.message });
 });
 
-// Configure multer for file uploads (e.g., for theme logos/icons)
+// Configure multer for file uploads
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
-    cb(null, 'public/uploads/'); // Changed to lowercase 'uploads'
+    cb(null, 'public/uploads/');
   },
   filename: (req, file, cb) => {
     const ext = path.extname(file.originalname);
     cb(null, `${file.fieldname}-${Date.now()}${ext}`);
   },
 });
+
 const upload = multer({
   storage,
   fileFilter: (req, file, cb) => {
@@ -90,7 +91,7 @@ app.use('/uploads', async (req, res, next) => {
     await fs.access(filePath);
     logger.info('Serving image from local uploads', { path: filePath, filename: req.path });
     res.set('Content-Type', 'image/*');
-    res.set('Cache-Control', 'public, max-age=31536000'); // Cache for 1 year
+    res.set('Cache-Control', 'public, max-age=31536000');
     return res.sendFile(filePath);
   } catch (error) {
     logger.warn('Local image not found, attempting case-insensitive lookup', {
@@ -104,6 +105,7 @@ app.use('/uploads', async (req, res, next) => {
     const fileName = path.basename(req.path);
     try {
       const files = await fs.readdir(uploadsDir);
+      logger.debug('Files in uploads directory', { files, uploadsDir });
       const matchedFile = files.find(f => f.toLowerCase() === fileName.toLowerCase());
       if (matchedFile) {
         filePath = path.join(uploadsDir, matchedFile);
@@ -113,15 +115,24 @@ app.use('/uploads', async (req, res, next) => {
         return res.sendFile(filePath);
       }
 
-      // Fallback to a default image
+      // Fallback to default image
       const defaultImagePath = path.join(__dirname, 'public', 'uploads', 'default-image.jpg');
-      await fs.access(defaultImagePath); // Ensure default image exists
-      logger.info('Serving default image', { path: defaultImagePath, filename: req.path });
-      res.set('Content-Type', 'image/jpeg');
-      res.set('Cache-Control', 'public, max-age=31536000');
-      return res.sendFile(defaultImagePath);
+      try {
+        await fs.access(defaultImagePath);
+        logger.info('Serving default image', { path: defaultImagePath, filename: req.path });
+        res.set('Content-Type', 'image/jpeg');
+        res.set('Cache-Control', 'public, max-age=31536000');
+        return res.sendFile(defaultImagePath);
+      } catch (defaultError) {
+        logger.error('Default image unavailable', {
+          path: defaultImagePath,
+          filename: req.path,
+          error: defaultError.message,
+        });
+        return res.status(404).json({ error: 'Image not found' });
+      }
     } catch (fallbackError) {
-      logger.error('Image not found locally, and default image unavailable', {
+      logger.error('Error during case-insensitive lookup', {
         path: filePath,
         filename: req.path,
         error: fallbackError.message,
@@ -157,7 +168,7 @@ app.use((req, res, next) => {
   next();
 });
 
-// Health check endpoint for hosted environment
+// Health check endpoint
 app.get('/health', (req, res) => {
   res.status(200).json({ status: 'OK', environment: process.env.NODE_ENV || 'production' });
 });
@@ -213,19 +224,17 @@ app.use('/api', (req, res, next) => {
   next();
 });
 
-// Debug route to list all files in uploads directory (optional, disabled in production)
-if (process.env.NODE_ENV !== 'production') {
-  app.get('/api/debug/uploads', async (req, res) => {
-    try {
-      const files = await fs.readdir(uploadDir);
-      logger.info('Listing files in uploads directory', { files });
-      res.json({ files });
-    } catch (error) {
-      logger.error('Error listing uploads directory', { error: error.message });
-      res.status(500).json({ error: 'Failed to list uploads directory' });
-    }
-  });
-}
+// Debug route to list all files in uploads directory (optional, enabled for debugging)
+app.get('/api/debug/uploads', async (req, res) => {
+  try {
+    const files = await fs.readdir(uploadDir);
+    logger.info('Listing files in uploads directory', { files, uploadDir });
+    res.json({ files });
+  } catch (error) {
+    logger.error('Error listing uploads directory', { error: error.message });
+    res.status(500).json({ error: 'Failed to list uploads directory' });
+  }
+});
 
 function logRoutes() {
   app._router?.stack?.forEach((layer) => {
