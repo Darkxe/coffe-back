@@ -9,7 +9,6 @@ const db = require('./config/db');
 const validate = require('./middleware/validate');
 const themeValidate = require('./middleware/themeValidate');
 const fs = require('fs').promises;
-const multer = require('multer');
 
 const app = express();
 const server = http.createServer(app);
@@ -19,32 +18,6 @@ const uploadDir = path.join(__dirname, 'public', 'Uploads');
 fs.mkdir(uploadDir, { recursive: true }).catch(err => {
   logger.error('Failed to create uploads directory', { error: err.message });
 });
-
-// Configure multer for file uploads (e.g., for theme logos/icons)
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, 'public/Uploads/');
-  },
-  filename: (req, file, cb) => {
-    const ext = path.extname(file.originalname);
-    cb(null, `${file.fieldname}-${Date.now()}${ext}`);
-  },
-});
-const upload = multer({
-  storage,
-  fileFilter: (req, file, cb) => {
-    const filetypes = /jpeg|jpg|png|ico/;
-    const extname = filetypes.test(path.extname(file.originalname).toLowerCase());
-    const mimetype = filetypes.test(file.mimetype);
-    if (extname && mimetype) {
-      return cb(null, true);
-    }
-    cb(new Error('Only .jpg, .jpeg, .png, and .ico files are allowed'));
-  },
-  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
-});
-
-app.set('upload', upload);
 
 // Configure allowed origins for CORS
 const allowedOrigins = [
@@ -82,33 +55,12 @@ app.use(express.urlencoded({ extended: true }));
 // Serve static files from the 'public' directory
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Serve the 'uploads' directory for images with GitHub fallback
-app.use('/uploads', async (req, res, next) => {
-  const filePath = path.join(__dirname, 'public', 'Uploads', req.path);
-  try {
-    await fs.access(filePath);
-    logger.info('Serving image from local Uploads', { path: filePath });
+// Explicitly serve the 'uploads' directory for images
+app.use('/uploads', express.static(path.join(__dirname, 'public', 'Uploads'), {
+  setHeaders: (res) => {
     res.set('Content-Type', 'image/*');
-    res.set('Cache-Control', 'no-cache, no-store, must-revalidate');
-    return res.sendFile(filePath);
-  } catch (error) {
-    const githubUrl = `https://raw.githubusercontent.com/Dark00097/coffe-back/main/public/uploads${req.path}`;
-    logger.warn('Local image not found, trying GitHub', { localPath: filePath, githubUrl });
-    try {
-      const response = await fetch(githubUrl);
-      if (!response.ok) {
-        logger.warn('Image not found on GitHub', { url: githubUrl });
-        return res.status(404).json({ error: 'Image not found' });
-      }
-      res.set('Content-Type', response.headers.get('content-type'));
-      res.set('Cache-Control', 'no-cache, no-store, must-revalidate');
-      response.body.pipe(res);
-    } catch (fetchError) {
-      logger.error('Error proxying image from GitHub', { error: fetchError.message, url: githubUrl });
-      res.status(500).json({ error: 'Failed to fetch image' });
-    }
-  }
-});
+  },
+}));
 
 // JWT Middleware
 app.use((req, res, next) => {
