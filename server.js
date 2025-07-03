@@ -44,7 +44,6 @@ const upload = multer({
   limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
 });
 
-// Make multer available to routes
 app.set('upload', upload);
 
 // Configure allowed origins for CORS
@@ -89,17 +88,36 @@ app.use(express.static(path.join(__dirname, 'public'), {
   },
 }));
 
-// Serve the 'Uploads' directory for images (both /Uploads and /uploads)
-app.use('/Uploads', express.static(path.join(__dirname, 'public', 'Uploads'), {
-  setHeaders: (res, path) => {
-    logger.info('Serving image from Uploads', { path });
+// Serve the 'Uploads' directory for images with GitHub fallback
+app.use('/uploads', async (req, res, next) => {
+  const filePath = path.join(__dirname, 'public', 'Uploads', req.path);
+  try {
+    await fs.access(filePath);
+    logger.info('Serving image from local Uploads', { path: filePath });
     res.set('Content-Type', 'image/*');
     res.set('Cache-Control', 'no-cache, no-store, must-revalidate');
-  },
-}));
-app.use('/uploads', express.static(path.join(__dirname, 'public', 'Uploads'), {
+    return res.sendFile(filePath);
+  } catch (error) {
+    const githubUrl = `https://raw.githubusercontent.com/Dark00097/coffe-back/main/public/uploads${req.path}`;
+    logger.warn('Local image not found, trying GitHub', { localPath: filePath, githubUrl });
+    try {
+      const response = await fetch(githubUrl);
+      if (!response.ok) {
+        logger.warn('Image not found on GitHub', { url: githubUrl });
+        return res.status(404).json({ error: 'Image not found' });
+      }
+      res.set('Content-Type', response.headers.get('content-type'));
+      res.set('Cache-Control', 'no-cache, no-store, must-revalidate');
+      response.body.pipe(res);
+    } catch (fetchError) {
+      logger.error('Error proxying image from GitHub', { error: fetchError.message, url: githubUrl });
+      res.status(500).json({ error: 'Failed to fetch image' });
+    }
+  }
+});
+app.use('/Uploads', express.static(path.join(__dirname, 'public', 'Uploads'), {
   setHeaders: (res, path) => {
-    logger.info('Serving image from uploads (lowercase)', { path });
+    logger.info('Serving image from Uploads (capitalized)', { path });
     res.set('Content-Type', 'image/*');
     res.set('Cache-Control', 'no-cache, no-store, must-revalidate');
   },
@@ -187,7 +205,7 @@ app.use('/api', (req, res, next) => {
   next();
 });
 
-// Debug route to list all files in uploads directory (available in all environments for debugging)
+// Debug route to list all files in uploads directory
 app.get('/api/debug/uploads', async (req, res) => {
   try {
     const files = await fs.readdir(uploadDir);
