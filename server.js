@@ -9,13 +9,13 @@ const db = require('./config/db');
 const validate = require('./middleware/validate');
 const themeValidate = require('./middleware/themeValidate');
 const fs = require('fs').promises;
-const multer = require('multer'); // Add multer for file uploads
+const multer = require('multer');
 
 const app = express();
 const server = http.createServer(app);
 
-// Ensure upload directory exists (use lowercase 'uploads' to match themeRoutes.js)
-const uploadDir = path.join(__dirname, 'public', 'uploads');
+// Ensure upload directory exists
+const uploadDir = path.join(__dirname, 'public', 'Uploads');
 fs.mkdir(uploadDir, { recursive: true }).catch(err => {
   logger.error('Failed to create uploads directory', { error: err.message });
 });
@@ -81,11 +81,25 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 // Serve static files from the 'public' directory
-app.use(express.static(path.join(__dirname, 'public')));
+app.use(express.static(path.join(__dirname, 'public'), {
+  setHeaders: (res, path) => {
+    if (path.includes('Uploads')) {
+      logger.info('Serving static file', { path });
+    }
+  },
+}));
 
-// Explicitly serve the 'Uploads' directory for images
+// Serve the 'Uploads' directory for images (both /Uploads and /uploads)
 app.use('/Uploads', express.static(path.join(__dirname, 'public', 'Uploads'), {
-  setHeaders: (res) => {
+  setHeaders: (res, path) => {
+    logger.info('Serving image from Uploads', { path });
+    res.set('Content-Type', 'image/*');
+    res.set('Cache-Control', 'no-cache, no-store, must-revalidate');
+  },
+}));
+app.use('/uploads', express.static(path.join(__dirname, 'public', 'Uploads'), {
+  setHeaders: (res, path) => {
+    logger.info('Serving image from uploads (lowercase)', { path });
     res.set('Content-Type', 'image/*');
     res.set('Cache-Control', 'no-cache, no-store, must-revalidate');
   },
@@ -173,19 +187,17 @@ app.use('/api', (req, res, next) => {
   next();
 });
 
-// Debug route to list all files in uploads directory (optional, disabled in production)
-if (process.env.NODE_ENV !== 'production') {
-  app.get('/api/debug/uploads', async (req, res) => {
-    try {
-      const files = await fs.readdir(uploadDir);
-      logger.info('Listing files in uploads directory', { files });
-      res.json({ files });
-    } catch (error) {
-      logger.error('Error listing uploads directory', { error: error.message });
-      res.status(500).json({ error: 'Failed to list uploads directory' });
-    }
-  });
-}
+// Debug route to list all files in uploads directory (available in all environments for debugging)
+app.get('/api/debug/uploads', async (req, res) => {
+  try {
+    const files = await fs.readdir(uploadDir);
+    logger.info('Listing files in uploads directory', { files });
+    res.json({ files });
+  } catch (error) {
+    logger.error('Error listing uploads directory', { error: error.message });
+    res.status(500).json({ error: 'Failed to list uploads directory' });
+  }
+});
 
 function logRoutes() {
   app._router?.stack?.forEach((layer) => {
