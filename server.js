@@ -20,7 +20,7 @@ fs.mkdir(uploadDir, { recursive: true }).catch(err => {
   logger.error('Failed to create uploads directory', { error: err.message });
 });
 
-// Configure multer for file uploads
+// Configure multer for file uploads (e.g., for theme logos/icons)
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
     cb(null, 'public/Uploads/');
@@ -49,7 +49,7 @@ app.set('upload', upload);
 // Configure allowed origins for CORS
 const allowedOrigins = [
   process.env.CLIENT_URL || 'https://coffe-front-production.up.railway.app',
-  ...(process.env.NODE_ENV === 'development' ? ['http://localhost:5173', 'http://192.168.1.6:5173'] : []),
+  ...(process.env.NODE_ENV === 'development' ? ['http://localhost:5173'] : []),
 ];
 
 const corsOptions = {
@@ -80,15 +80,9 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 // Serve static files from the 'public' directory
-app.use(express.static(path.join(__dirname, 'public'), {
-  setHeaders: (res, path) => {
-    if (path.includes('Uploads')) {
-      logger.info('Serving static file', { path });
-    }
-  },
-}));
+app.use(express.static(path.join(__dirname, 'public')));
 
-// Serve the 'Uploads' directory for images with GitHub fallback
+// Serve the 'uploads' directory for images with GitHub fallback
 app.use('/uploads', async (req, res, next) => {
   const filePath = path.join(__dirname, 'public', 'Uploads', req.path);
   try {
@@ -115,13 +109,6 @@ app.use('/uploads', async (req, res, next) => {
     }
   }
 });
-app.use('/Uploads', express.static(path.join(__dirname, 'public', 'Uploads'), {
-  setHeaders: (res, path) => {
-    logger.info('Serving image from Uploads (capitalized)', { path });
-    res.set('Content-Type', 'image/*');
-    res.set('Cache-Control', 'no-cache, no-store, must-revalidate');
-  },
-}));
 
 // JWT Middleware
 app.use((req, res, next) => {
@@ -205,17 +192,19 @@ app.use('/api', (req, res, next) => {
   next();
 });
 
-// Debug route to list all files in uploads directory
-app.get('/api/debug/uploads', async (req, res) => {
-  try {
-    const files = await fs.readdir(uploadDir);
-    logger.info('Listing files in uploads directory', { files });
-    res.json({ files });
-  } catch (error) {
-    logger.error('Error listing uploads directory', { error: error.message });
-    res.status(500).json({ error: 'Failed to list uploads directory' });
-  }
-});
+// Debug route to list all files in uploads directory (optional, disabled in production)
+if (process.env.NODE_ENV !== 'production') {
+  app.get('/api/debug/uploads', async (req, res) => {
+    try {
+      const files = await fs.readdir(uploadDir);
+      logger.info('Listing files in uploads directory', { files });
+      res.json({ files });
+    } catch (error) {
+      logger.error('Error listing uploads directory', { error: error.message });
+      res.status(500).json({ error: 'Failed to list uploads directory' });
+    }
+  });
+}
 
 function logRoutes() {
   app._router?.stack?.forEach((layer) => {
