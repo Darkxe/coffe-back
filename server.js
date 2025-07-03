@@ -15,7 +15,7 @@ const app = express();
 const server = http.createServer(app);
 
 // Ensure upload directory exists
-const uploadDir = path.join(__dirname, 'public', 'Uploads');
+const uploadDir = path.join(__dirname, 'public', 'uploads');
 fs.mkdir(uploadDir, { recursive: true }).catch(err => {
   logger.error('Failed to create uploads directory', { error: err.message });
 });
@@ -23,7 +23,7 @@ fs.mkdir(uploadDir, { recursive: true }).catch(err => {
 // Configure multer for file uploads (e.g., for theme logos/icons)
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
-    cb(null, 'public/Uploads/');
+    cb(null, 'public/uploads/'); // Changed to lowercase 'uploads'
   },
   filename: (req, file, cb) => {
     const ext = path.extname(file.originalname);
@@ -82,31 +82,51 @@ app.use(express.urlencoded({ extended: true }));
 // Serve static files from the 'public' directory
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Serve the 'uploads' directory for images with GitHub fallback and detailed logging
+// Serve the 'uploads' directory for images
 app.use('/uploads', async (req, res, next) => {
-  const filePath = path.join(__dirname, 'public', 'Uploads', req.path);
+  let filePath = path.join(__dirname, 'public', 'uploads', req.path);
   try {
+    // Check if file exists locally (case-sensitive)
     await fs.access(filePath);
-    logger.info('Serving image from local Uploads', { path: filePath, filename: req.path });
+    logger.info('Serving image from local uploads', { path: filePath, filename: req.path });
     res.set('Content-Type', 'image/*');
-    res.set('Cache-Control', 'no-cache, no-store, must-revalidate');
+    res.set('Cache-Control', 'public, max-age=31536000'); // Cache for 1 year
     return res.sendFile(filePath);
   } catch (error) {
-    logger.warn('Local image not found', { path: filePath, filename: req.path, error: error.message });
-    const githubUrl = `https://raw.githubusercontent.com/Dark00097/coffe-back/main/public/uploads${req.path}`;
-    logger.info('Attempting to fetch image from GitHub', { githubUrl });
+    logger.warn('Local image not found, attempting case-insensitive lookup', {
+      path: filePath,
+      filename: req.path,
+      error: error.message,
+    });
+
+    // Try case-insensitive lookup
+    const uploadsDir = path.join(__dirname, 'public', 'uploads');
+    const fileName = path.basename(req.path);
     try {
-      const response = await fetch(githubUrl);
-      if (!response.ok) {
-        logger.error('Image not found on GitHub', { url: githubUrl, status: response.status });
-        return res.status(404).json({ error: 'Image not found locally or on GitHub' });
+      const files = await fs.readdir(uploadsDir);
+      const matchedFile = files.find(f => f.toLowerCase() === fileName.toLowerCase());
+      if (matchedFile) {
+        filePath = path.join(uploadsDir, matchedFile);
+        logger.info('Serving image from case-insensitive match', { path: filePath, filename: req.path });
+        res.set('Content-Type', 'image/*');
+        res.set('Cache-Control', 'public, max-age=31536000');
+        return res.sendFile(filePath);
       }
-      res.set('Content-Type', response.headers.get('content-type'));
-      res.set('Cache-Control', 'no-cache, no-store, must-revalidate');
-      response.body.pipe(res);
-    } catch (fetchError) {
-      logger.error('Error proxying image from GitHub', { error: fetchError.message, url: githubUrl });
-      res.status(500).json({ error: 'Failed to fetch image from GitHub' });
+
+      // Fallback to a default image
+      const defaultImagePath = path.join(__dirname, 'public', 'uploads', 'default-image.jpg');
+      await fs.access(defaultImagePath); // Ensure default image exists
+      logger.info('Serving default image', { path: defaultImagePath, filename: req.path });
+      res.set('Content-Type', 'image/jpeg');
+      res.set('Cache-Control', 'public, max-age=31536000');
+      return res.sendFile(defaultImagePath);
+    } catch (fallbackError) {
+      logger.error('Image not found locally, and default image unavailable', {
+        path: filePath,
+        filename: req.path,
+        error: fallbackError.message,
+      });
+      return res.status(404).json({ error: 'Image not found' });
     }
   }
 });
