@@ -82,64 +82,7 @@ app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, 'public')));
 
 // Serve the 'uploads' directory for images
-app.use('/uploads', async (req, res, next) => {
-  logger.info('Image request received', { url: req.url, path: req.path });
-  let filePath = path.join(__dirname, 'public', 'Uploads', req.path);
-  try {
-    // Check if file exists locally (case-sensitive)
-    await fs.access(filePath);
-    logger.info('Serving image from local uploads', { path: filePath, filename: req.path });
-    res.set('Content-Type', 'image/*');
-    res.set('Cache-Control', 'public, max-age=31536000');
-    return res.sendFile(filePath);
-  } catch (error) {
-    logger.warn('Local image not found, attempting case-insensitive lookup', {
-      path: filePath,
-      filename: req.path,
-      error: error.message,
-    });
-
-    // Try case-insensitive lookup
-    const uploadsDir = path.join(__dirname, 'public', 'Uploads');
-    const fileName = path.basename(req.path);
-    try {
-      const files = await fs.readdir(uploadsDir);
-      logger.debug('Files in uploads directory', { files, uploadsDir });
-      const matchedFile = files.find(f => f.toLowerCase() === fileName.toLowerCase());
-      if (matchedFile) {
-        filePath = path.join(uploadsDir, matchedFile);
-        logger.info('Serving image from case-insensitive match', { path: filePath, filename: req.path });
-        res.set('Content-Type', 'image/*');
-        res.set('Cache-Control', 'public, max-age=31536000');
-        return res.sendFile(filePath);
-      }
-
-      // Fallback to default image
-      const defaultImagePath = path.join(__dirname, 'public', 'Uploads', 'default-image.jpg');
-      try {
-        await fs.access(defaultImagePath);
-        logger.info('Serving default image', { path: defaultImagePath, filename: req.path });
-        res.set('Content-Type', 'image/jpeg');
-        res.set('Cache-Control', 'public, max-age=31536000');
-        return res.sendFile(defaultImagePath);
-      } catch (defaultError) {
-        logger.error('Default image unavailable', {
-          path: defaultImagePath,
-          filename: req.path,
-          error: defaultError.message,
-        });
-        return res.status(404).json({ error: 'Image not found' });
-      }
-    } catch (fallbackError) {
-      logger.error('Error during case-insensitive lookup', {
-        path: filePath,
-        filename: req.path,
-        error: fallbackError.message,
-      });
-      return res.status(404).json({ error: 'Image not found' });
-    }
-  }
-});
+app.use('/uploads', express.static(path.join(__dirname, 'public', 'uploads')));
 
 // JWT Middleware
 app.use((req, res, next) => {
