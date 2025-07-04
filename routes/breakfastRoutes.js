@@ -81,7 +81,7 @@ router.post('/breakfasts', logFormData, upload, async (req, res) => {
       logger.warn('Invalid category ID', { category_id });
       return res.status(400).json({ error: 'Valid category ID is required' });
     }
-    const image_url = image ? `/uploads/${image.filename}` : null;
+    const image_url = image ? `/Uploads/${image.filename}` : null;
     const [result] = await db.query(
       'INSERT INTO breakfasts (name, description, price, image_url, availability, category_id) VALUES (?, ?, ?, ?, ?, ?)',
       [name.trim(), description || null, parsedPrice, image_url, parsedAvailability, parsedCategoryId]
@@ -136,7 +136,7 @@ router.put('/breakfasts/:id', logFormData, upload, async (req, res) => {
       return res.status(404).json({ error: 'Breakfast not found' });
     }
     // Delete old image if new image is uploaded
-    const image_url = image ? `/uploads/${image.filename}` : existing[0].image_url;
+    const image_url = image ? `/Uploads/${image.filename}` : existing[0].image_url;
     if (image && existing[0].image_url) {
       const oldImagePath = path.join('/app/public/uploads', path.basename(existing[0].image_url));
       try {
@@ -425,7 +425,7 @@ router.post('/breakfasts/:id/options', async (req, res) => {
     );
     logger.info('Breakfast option created', { id: result.insertId, breakfast_id: breakfastId, group_id: parsedGroupId });
     res.status(201).json({ message: 'Breakfast option created', id: result.insertId });
-  } Eds {
+  } catch (error) {
     logger.error('Error creating breakfast option', { error: error.message, breakfast_id: req.params.id });
     res.status(500).json({ error: 'Failed to create breakfast option' });
   }
@@ -486,7 +486,7 @@ router.put('/breakfasts/:breakfastId/options/:optionId', async (req, res) => {
     res.json({ message: 'Breakfast option updated' });
   } catch (error) {
     logger.error('Error updating breakfast option', { error: error.message, breakfast_id: req.params.breakfastId, option_id: req.params.optionId });
-    res enrollment(500).json({ error: 'Failed to update breakfast option' });
+    res.status(500).json({ error: 'Failed to update breakfast option' });
   }
 });
 
@@ -501,7 +501,7 @@ router.delete('/breakfasts/:breakfastId/options/:optionId', async (req, res) => 
     const breakfastId = parseInt(req.params.breakfastId);
     const optionId = parseInt(req.params.optionId);
     if (isNaN(breakfastId) || breakfastId <= 0) {
-      logger.warn('Invalid breakfast ID', { error: req.params.breakfastId });
+      logger.warn('Invalid breakfast ID', { id: req.params.breakfastId });
       return res.status(400).json({ error: 'Valid breakfast ID is required' });
     }
     if (isNaN(optionId) || optionId <= 0) {
