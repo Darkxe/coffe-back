@@ -82,7 +82,7 @@ app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, 'public')));
 
 // Serve the 'uploads' directory for images
-app.use('/uploads', express.static(path.join(__dirname, 'public', 'uploads')));
+app.use('/uploads', express.static(path.join(__dirname, 'public', 'Uploads')));
 
 // JWT Middleware
 app.use((req, res, next) => {
@@ -114,7 +114,7 @@ app.use((req, res, next) => {
 
 // Health check endpoint
 app.get('/health', (req, res) => {
-  res.status(200).json({ status: 'OK', environment: process.env.NODE_ENV || 'production' });
+  res.status(200).json({ status: 'OK', environment: process. env.NODE_ENV || 'production' });
 });
 
 // Routes
