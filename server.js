@@ -81,8 +81,17 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Serve the 'uploads' directory for images
-app.use('/uploads', express.static(path.join(__dirname, 'public', 'Uploads')));
+// Serve the 'uploads' directory for images, handling query parameters
+app.use('/uploads', (req, res, next) => {
+  const filePath = path.join(__dirname, 'public', 'uploads', req.path.split('?')[0]); // Ignore query parameters
+  fs.access(filePath)
+    .then(() => {
+      res.sendFile(filePath);
+    })
+    .catch(() => {
+      next(); // Pass to 404 handler if file not found
+    });
+});
 
 // JWT Middleware
 app.use((req, res, next) => {
@@ -114,7 +123,7 @@ app.use((req, res, next) => {
 
 // Health check endpoint
 app.get('/health', (req, res) => {
-  res.status(200).json({ status: 'OK', environment: process. env.NODE_ENV || 'production' });
+  res.status(200).json({ status: 'OK', environment: process.env.NODE_ENV || 'production' });
 });
 
 // Routes
