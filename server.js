@@ -50,12 +50,12 @@ app.set('upload', upload);
 // Configure allowed origins for CORS
 const allowedOrigins = [
   process.env.CLIENT_URL || 'https://coffe-front-production.up.railway.app',
-  ...(process.env.NODE_ENV === 'development' ? ['http://localhost:5173'] : []),
+  ...(process.env.NODE_ENV === 'development' ? ['http://localhost:5173', 'http://192.168.1.6:5173', /^http:\/\/192\.168\.1\.\d{1,3}:5173$/] : []),
 ];
 
 const corsOptions = {
   origin: (origin, callback) => {
-    if (!origin || allowedOrigins.includes(origin)) {
+    if (!origin || allowedOrigins.some(allowed => typeof allowed === 'string' ? allowed === origin : allowed.test(origin))) {
       callback(null, true);
     } else {
       logger.warn('CORS blocked', { origin });
@@ -79,13 +79,12 @@ const io = new Server(server, {
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-
-// Serve static files from the 'public' directory
 app.use(express.static(path.join(__dirname, 'public')));
 
 // Serve the 'uploads' directory for images
 app.use('/uploads', async (req, res, next) => {
-  let filePath = path.join(__dirname, 'public', 'uploads', req.path);
+  logger.info('Image request received', { url: req.url, path: req.path });
+  let filePath = path.join(__dirname, 'public', 'Uploads', req.path);
   try {
     // Check if file exists locally (case-sensitive)
     await fs.access(filePath);
@@ -101,7 +100,7 @@ app.use('/uploads', async (req, res, next) => {
     });
 
     // Try case-insensitive lookup
-    const uploadsDir = path.join(__dirname, 'public', 'uploads');
+    const uploadsDir = path.join(__dirname, 'public', 'Uploads');
     const fileName = path.basename(req.path);
     try {
       const files = await fs.readdir(uploadsDir);
@@ -116,7 +115,7 @@ app.use('/uploads', async (req, res, next) => {
       }
 
       // Fallback to default image
-      const defaultImagePath = path.join(__dirname, 'public', 'uploads', 'default-image.jpg');
+      const defaultImagePath = path.join(__dirname, 'public', 'Uploads', 'default-image.jpg');
       try {
         await fs.access(defaultImagePath);
         logger.info('Serving default image', { path: defaultImagePath, filename: req.path });
@@ -158,6 +157,8 @@ app.use((req, res, next) => {
     } catch (error) {
       logger.warn('Invalid JWT', { error: error.message, token: token.substring(0, 10) + '...' });
     }
+  } else {
+    logger.debug('No token provided in request', { path: req.url });
   }
   logger.info('Incoming request', {
     method: req.method,
@@ -224,7 +225,7 @@ app.use('/api', (req, res, next) => {
   next();
 });
 
-// Debug route to list all files in uploads directory (enabled for debugging)
+// Debug route to list all files in uploads directory
 app.get('/api/debug/uploads', async (req, res) => {
   try {
     const files = await fs.readdir(uploadDir);
@@ -262,7 +263,6 @@ function logRoutes() {
 
 logRoutes();
 
-// Error handling middleware
 app.use((err, req, res, next) => {
   if (err.code === 'ECONNABORTED') {
     logger.error('Request aborted', {
@@ -283,7 +283,6 @@ app.use((err, req, res, next) => {
   res.status(500).json({ error: 'Internal server error' });
 });
 
-// Not found middleware
 app.use((req, res) => {
   logger.warn('Route not found', {
     method: req.method,
