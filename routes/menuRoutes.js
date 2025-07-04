@@ -8,7 +8,7 @@ const path = require('path');
 const fs = require('fs').promises;
 
 // Ensure upload directory exists
-const uploadDir = path.join(__dirname, '..', 'public', 'uploads');
+const uploadDir = '/app/public/uploads';
 fs.mkdir(uploadDir, { recursive: true }).catch(err => {
   logger.error('Failed to create uploads directory', { error: err.message });
 });
@@ -69,7 +69,7 @@ router.post('/categories', logFormData, upload, async (req, res) => {
       logger.warn('Missing category name', { user_id });
       return res.status(400).json({ error: 'Category name is required' });
     }
-    const image_url = image ? `/uploads/${image.filename}` : null; // Updated to lowercase
+    const image_url = image ? `/uploads/${image.filename}` : null;
     const parsedIsTop = is_top === 'true' || is_top === true ? 1 : 0;
     const [result] = await db.query(
       'INSERT INTO categories (name, description, image_url, is_top) VALUES (?, ?, ?, ?)',
@@ -107,12 +107,12 @@ router.put('/categories/:id', logFormData, upload, async (req, res) => {
       logger.warn('Missing category name', { user_id });
       return res.status(400).json({ error: 'Category name is required' });
     }
-    const image_url = image ? `/uploads/${image.filename}` : null; // Updated to lowercase
+    const image_url = image ? `/uploads/${image.filename}` : null;
     // Delete old image if new image is uploaded
     if (image_url) {
       const [existing] = await db.query('SELECT image_url FROM categories WHERE id = ?', [categoryId]);
       if (existing.length && existing[0].image_url) {
-        const oldImagePath = path.join(__dirname, '..', 'public', existing[0].image_url.replace('/uploads/', 'Uploads/')); // Handle legacy case
+        const oldImagePath = path.join('/app/public/uploads', path.basename(existing[0].image_url));
         try {
           await fs.unlink(oldImagePath);
         } catch (err) {
@@ -152,7 +152,6 @@ router.delete('/categories/:id', async (req, res) => {
       return res.status(403).json({ error: 'Admin access required' });
     }
     const categoryId = parseInt(id);
-    if84
     if (isNaN(categoryId) || categoryId <= 0) {
       logger.warn('Invalid category ID', { id });
       return res.status(400).json({ error: 'Valid category ID is required' });
@@ -160,7 +159,7 @@ router.delete('/categories/:id', async (req, res) => {
     // Delete associated image
     const [existing] = await db.query('SELECT image_url FROM categories WHERE id = ?', [categoryId]);
     if (existing.length && existing[0].image_url) {
-      const imagePath = path.join(__dirname, '..', 'public', existing[0].image_url.replace('/uploads/', 'Uploads/')); // Handle legacy case
+      const imagePath = path.join('/app/public/uploads', path.basename(existing[0].image_url));
       try {
         await fs.unlink(imagePath);
       } catch (err) {
@@ -292,7 +291,7 @@ router.post('/menu-items', logFormData, upload, async (req, res) => {
       logger.warn('Invalid sale price', { sale_price });
       return res.status(400).json({ error: 'Sale price must be a non-negative number' });
     }
-    const image_url = image ? `/uploads/${image.filename}` : null; // Updated to lowercase
+    const image_url = image ? `/uploads/${image.filename}` : null;
     const [result] = await db.query(
       'INSERT INTO menu_items (name, description, regular_price, sale_price, category_id, image_url, availability, dietary_tags, is_best_seller) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
       [name.trim(), description || null, parsedRegularPrice, parsedSalePrice, parsedCategoryId, image_url, parsedAvailability, JSON.stringify(parsedDietaryTags), parsedIsBestSeller]
@@ -361,9 +360,9 @@ router.put('/menu-items/:id', logFormData, upload, async (req, res) => {
       return res.status(404).json({ error: 'Menu item not found' });
     }
     // Delete old image if new image is uploaded
-    const image_url = image ? `/uploads/${image.filename}` : existing[0].image_url; // Updated to lowercase
+    const image_url = image ? `/uploads/${image.filename}` : existing[0].image_url;
     if (image && existing[0].image_url) {
-      const oldImagePath = path.join(__dirname, '..', 'public', existing[0].image_url.replace('/uploads/', 'Uploads/')); // Handle legacy case
+      const oldImagePath = path.join('/app/public/uploads', path.basename(existing[0].image_url));
       try {
         await fs.unlink(oldImagePath);
       } catch (err) {
@@ -419,7 +418,7 @@ router.delete('/menu-items/:id', async (req, res) => {
     }
     // Delete associated image
     if (existing[0].image_url) {
-      const imagePath = path.join(__dirname, '..', 'public', existing[0].image_url.replace('/uploads/', 'Uploads/')); // Handle legacy case
+      const imagePath = path.join('/app/public/uploads', path.basename(existing[0].image_url));
       try {
         await fs.unlink(imagePath);
       } catch (err) {
