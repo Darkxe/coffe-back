@@ -211,8 +211,7 @@ router.get('/banners', async (req, res) => {
       logger.warn('User is not admin', { user_id });
       return res.status(403).json({ error: 'Admin access required: Not an admin' });
     }
-    const [rows] = await db.query('SELECT id, image_url, link, is_enabled, created_at, updated_at, admi
-n_id FROM banners');
+    const [rows] = await db.query('SELECT id, image_url, link, is_enabled, created_at, updated_at, admin_id FROM banners');
     res.json(rows);
   } catch (error) {
     logger.error('Error fetching banners', { error: error.message });
