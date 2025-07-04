@@ -15,7 +15,7 @@ const app = express();
 const server = http.createServer(app);
 
 // Ensure upload directory exists
-const uploadDir = path.join(__dirname, 'public', 'uploads');
+const uploadDir = '/app/public/uploads';
 fs.mkdir(uploadDir, { recursive: true }).catch(err => {
   logger.error('Failed to create uploads directory', { error: err.message });
 });
@@ -23,7 +23,7 @@ fs.mkdir(uploadDir, { recursive: true }).catch(err => {
 // Configure multer for file uploads
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
-    cb(null, 'public/uploads/');
+    cb(null, uploadDir);
   },
   filename: (req, file, cb) => {
     const ext = path.extname(file.originalname);
@@ -82,8 +82,8 @@ app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, 'public')));
 
 // Serve the 'uploads' directory for images, handling query parameters
-app.use('/uploads', (req, res, next) => {
-  const filePath = path.join(__dirname, 'public', 'uploads', req.path.split('?')[0]); // Ignore query parameters
+app.use('/public/uploads', (req, res, next) => {
+  const filePath = path.join(uploadDir, req.path.split('?')[0]); // Ignore query parameters
   fs.access(filePath)
     .then(() => {
       res.sendFile(filePath);
