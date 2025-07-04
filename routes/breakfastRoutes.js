@@ -8,7 +8,7 @@ const path = require('path');
 const fs = require('fs').promises;
 
 // Ensure upload directory exists
-const uploadDir = path.join(__dirname, '..', 'public', 'uploads');
+const uploadDir = '/app/public/uploads';
 fs.mkdir(uploadDir, { recursive: true }).catch(err => {
   logger.error('Failed to create uploads directory', { error: err.message });
 });
@@ -81,7 +81,7 @@ router.post('/breakfasts', logFormData, upload, async (req, res) => {
       logger.warn('Invalid category ID', { category_id });
       return res.status(400).json({ error: 'Valid category ID is required' });
     }
-    const image_url = image ? `/uploads/${image.filename}` : null; // Updated to lowercase
+    const image_url = image ? `/uploads/${image.filename}` : null;
     const [result] = await db.query(
       'INSERT INTO breakfasts (name, description, price, image_url, availability, category_id) VALUES (?, ?, ?, ?, ?, ?)',
       [name.trim(), description || null, parsedPrice, image_url, parsedAvailability, parsedCategoryId]
@@ -136,9 +136,9 @@ router.put('/breakfasts/:id', logFormData, upload, async (req, res) => {
       return res.status(404).json({ error: 'Breakfast not found' });
     }
     // Delete old image if new image is uploaded
-    const image_url = image ? `/uploads/${image.filename}` : existing[0].image_url; // Updated to lowercase
+    const image_url = image ? `/uploads/${image.filename}` : existing[0].image_url;
     if (image && existing[0].image_url) {
-      const oldImagePath = path.join(__dirname, '..', 'public', existing[0].image_url.replace('/uploads/', 'Uploads/')); // Handle legacy case
+      const oldImagePath = path.join('/app/public/uploads', path.basename(existing[0].image_url));
       try {
         await fs.unlink(oldImagePath);
       } catch (err) {
@@ -185,7 +185,7 @@ router.delete('/breakfasts/:id', async (req, res) => {
     // Delete associated image
     const [existing] = await db.query('SELECT image_url FROM breakfasts WHERE id = ?', [breakfastId]);
     if (existing.length && existing[0].image_url) {
-      const imagePath = path.join(__dirname, '..', 'public', existing[0].image_url.replace('/uploads/', 'Uploads/')); // Handle legacy case
+      const imagePath = path.join('/app/public/uploads', path.basename(existing[0].image_url));
       try {
         await fs.unlink(imagePath);
       } catch (err) {
@@ -425,7 +425,7 @@ router.post('/breakfasts/:id/options', async (req, res) => {
     );
     logger.info('Breakfast option created', { id: result.insertId, breakfast_id: breakfastId, group_id: parsedGroupId });
     res.status(201).json({ message: 'Breakfast option created', id: result.insertId });
-  } catch (error) {
+  } Eds {
     logger.error('Error creating breakfast option', { error: error.message, breakfast_id: req.params.id });
     res.status(500).json({ error: 'Failed to create breakfast option' });
   }
@@ -486,7 +486,7 @@ router.put('/breakfasts/:breakfastId/options/:optionId', async (req, res) => {
     res.json({ message: 'Breakfast option updated' });
   } catch (error) {
     logger.error('Error updating breakfast option', { error: error.message, breakfast_id: req.params.breakfastId, option_id: req.params.optionId });
-    res.status(500).json({ error: 'Failed to update breakfast option' });
+    res enrollment(500).json({ error: 'Failed to update breakfast option' });
   }
 });
 
@@ -501,7 +501,7 @@ router.delete('/breakfasts/:breakfastId/options/:optionId', async (req, res) => 
     const breakfastId = parseInt(req.params.breakfastId);
     const optionId = parseInt(req.params.optionId);
     if (isNaN(breakfastId) || breakfastId <= 0) {
-      logger.warn('Invalid breakfast ID', { id: req.params.breakfastId });
+      logger.warn('Invalid breakfast ID', { error: req.params.breakfastId });
       return res.status(400).json({ error: 'Valid breakfast ID is required' });
     }
     if (isNaN(optionId) || optionId <= 0) {
