@@ -8,7 +8,7 @@ const path = require('path');
 const fs = require('fs').promises;
 
 // Ensure upload directory exists
-const uploadDir = path.join(__dirname, '..', 'public', 'uploads');
+const uploadDir = '/app/public/uploads';
 fs.mkdir(uploadDir, { recursive: true }).catch(err => {
   logger.error('Failed to create uploads directory', { error: err.message });
 });
@@ -69,7 +69,7 @@ router.post('/banners', upload, async (req, res) => {
       logger.warn('Missing banner image', { user_id });
       return res.status(400).json({ error: 'Banner image is required' });
     }
-    const image_url = `/uploads/${image.filename}`; // Updated to lowercase
+    const image_url = `/uploads/${image.filename}`;
     const parsedIsEnabled = is_enabled === 'true' || is_enabled === true;
     const [result] = await db.query(
       'INSERT INTO banners (image_url, link, is_enabled, admin_id) VALUES (?, ?, ?, ?)',
@@ -116,15 +116,14 @@ router.put('/banners/:id', upload, async (req, res) => {
       logger.warn('Missing banner link', { user_id });
       return res.status(400).json({ error: 'Banner link is required' });
     }
-    const parsedIsEnabled = is_enabled === 'true' || is_enabled === true;
     const [existing] = await db.query('SELECT image_url FROM banners WHERE id = ?', [bannerId]);
     if (existing.length === 0) {
       logger.warn('Banner not found', { id: bannerId });
       return res.status(404).json({ error: 'Banner not found' });
     }
-    const image_url = image ? `/uploads/${image.filename}` : existing[0].image_url; // Updated to lowercase
+    const image_url = image ? `/uploads/${image.filename}` : existing[0].image_url;
     if (image && existing[0].image_url) {
-      const oldImagePath = path.join(__dirname, '..', 'public', existing[0].image_url.replace('/uploads/', 'Uploads/')); // Handle legacy case
+      const oldImagePath = path.join('/app/public/uploads', path.basename(existing[0].image_url));
       try {
         await fs.unlink(oldImagePath);
       } catch (err) {
@@ -173,7 +172,7 @@ router.delete('/banners/:id', async (req, res) => {
     }
     const [existing] = await db.query('SELECT image_url FROM banners WHERE id = ?', [bannerId]);
     if (existing.length && existing[0].image_url) {
-      const imagePath = path.join(__dirname, '..', 'public', existing[0].image_url.replace('/uploads/', 'Uploads/')); // Handle legacy case
+      const imagePath = path.join('/app/public/uploads', path.basename(existing[0].image_url));
       try {
         await fs.unlink(imagePath);
       } catch (err) {
@@ -212,7 +211,8 @@ router.get('/banners', async (req, res) => {
       logger.warn('User is not admin', { user_id });
       return res.status(403).json({ error: 'Admin access required: Not an admin' });
     }
-    const [rows] = await db.query('SELECT id, image_url, link, is_enabled, created_at, updated_at, admin_id FROM banners');
+    const [rows] = await db.query('SELECT id, image_url, link, is_enabled, created_at, updated_at, admi
+n_id FROM banners');
     res.json(rows);
   } catch (error) {
     logger.error('Error fetching banners', { error: error.message });
