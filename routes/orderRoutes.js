@@ -51,7 +51,7 @@ module.exports = (io) => {
         logger.warn('Invalid or empty items', { sessionId, timestamp });
         return res.status(400).json({ error: 'Items or breakfast items array is required and non-empty' });
       }
-      if (!order_type || !['local', 'delivery'].includes(order_type)) {
+      if (!order_type || !['local', 'delivery', 'imported'].includes(order_type)) {
         logger.warn('Invalid order_type', { order_type, sessionId, timestamp });
         return res.status(400).json({ error: 'Invalid order type' });
       }
@@ -185,19 +185,21 @@ module.exports = (io) => {
       }
 
       let table = null;
-      if (table_id) {
-        const [tableRows] = await db.query('SELECT id, status FROM tables WHERE id = ?', [table_id]);
-        if (tableRows.length === 0) {
-          logger.warn('Invalid table', { table_id, sessionId, timestamp });
-          return res.status(400).json({ error: 'Table does not exist' });
-        }
-        table = tableRows;
-        if (table[0].status === 'reserved') {
-          logger.warn('Table reserved', { table_id, sessionId, timestamp });
-          return res.status(400).json({ error: 'Table is reserved' });
-        }
-        if (table[0].status !== 'occupied') {
-          await db.query('UPDATE tables SET status = ? WHERE id = ?', ['occupied', table_id]);
+      if (order_type === 'local') {
+        if (table_id) {
+          const [tableRows] = await db.query('SELECT id, status FROM tables WHERE id = ?', [table_id]);
+          if (tableRows.length === 0) {
+            logger.warn('Invalid table', { table_id, sessionId, timestamp });
+            return res.status(400).json({ error: 'Table does not exist' });
+          }
+          table = tableRows;
+          if (table[0].status === 'reserved') {
+            logger.warn('Table reserved', { table_id, sessionId, timestamp });
+            return res.status(400).json({ error: 'Table is reserved' });
+          }
+          if (table[0].status !== 'occupied') {
+            await db.query('UPDATE tables SET status = ? WHERE id = ?', ['occupied', table_id]);
+          }
         }
       }
 
@@ -319,10 +321,15 @@ module.exports = (io) => {
 
         orderDetails[0].approved = Number(orderDetails[0].approved);
 
-        const table_number = orderDetails[0].table_number || 'N/A';
-        const notificationMessage = order_type === 'local'
-          ? `New order #${orderId} for Table ${table_number}`
-          : `New delivery order #${orderId} for ${delivery_address}`;
+        let notificationMessage;
+        if (order_type === 'local') {
+          notificationMessage = `New order #${orderId} for Table ${orderDetails[0].table_number || 'N/A'}`;
+        } else if (order_type === 'delivery') {
+          notificationMessage = `New delivery order #${orderId} for ${delivery_address}`;
+        } else {
+          notificationMessage = `New imported order #${orderId}`;
+        }
+
         const [notificationResult] = await connection.query(
           'INSERT INTO notifications (type, reference_id, message) VALUES (?, ?, ?)',
           ['order', orderId, notificationMessage]
@@ -336,7 +343,7 @@ module.exports = (io) => {
 
         io.to('staff-notifications').emit('newOrder', orderDetails[0]);
         io.to(`guest-${sessionId}`).emit('newOrder', orderDetails[0]);
-        if (table_id && table && table[0].status !== 'occupied') {
+        if (order_type === 'local' && table_id && table && table[0].status !== 'occupied') {
           io.to('staff-notifications').emit('tableStatusUpdate', { id: table_id, status: 'occupied' });
         }
 
