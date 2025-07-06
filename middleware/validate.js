@@ -162,8 +162,8 @@ const validate = (req, res, next) => {
           .isFloat({ min: 0.01 })
           .withMessage('Total price must be a positive number'),
         body('order_type')
-          .isIn(['delivery', 'local'])
-          .withMessage('Order type must be delivery or local'),
+          .isIn(['delivery', 'local', 'imported'])
+          .withMessage('Order type must be delivery, local, or imported'),
         body('delivery_address')
           .if(body('order_type').equals('delivery'))
           .notEmpty()
@@ -204,11 +204,11 @@ const validate = (req, res, next) => {
     } else if (req.path.match(/^\/orders\/\d+\/approve$/) && req.method === 'POST') {
       validations.push(
         param('id')
-          .isString()
-          .trim()
-          .customSanitizer(value => parseInt(value))
-          .isInt({ min: 1 })
-          .withMessage('Valid order ID is required')
+            .isString()
+            .trim()
+            .customSanitizer(value => parseInt(value))
+            .isInt({ min: 1 })
+            .withMessage('Valid order ID is required')
       );
     } else if (req.path.includes('/categories') && !req.path.includes('/supplements')) {
       validations.push(
@@ -938,7 +938,8 @@ const validate = (req, res, next) => {
         param('id')
           .isString()
           .trim()
-          .customSanitizer(value => parseInt(value))
+          .customSani
+        (value => parseInt(value))
           .isInt({ min: 1 })
           .withMessage('Invalid user ID'),
         body('user_id')
@@ -1011,7 +1012,7 @@ const validate = (req, res, next) => {
           .optional()
           .isString()
           .trim()
-          .customSanitizer(value => value ? parseInt(value) : undefined)
+          .customSanitizer(value => parseInt(value))
           .isInt({ min: 1 })
           .custom((value, { req }) => {
             if (value && (!req.user || req.user.id !== value)) {
