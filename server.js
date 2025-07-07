@@ -14,11 +14,22 @@ const multer = require('multer');
 const app = express();
 const server = http.createServer(app);
 
-// Ensure upload directory exists
+// Ensure upload directory exists and is writable
 const uploadDir = '/app/public/uploads';
-fs.mkdir(uploadDir, { recursive: true }).catch(err => {
-  logger.error('Failed to create uploads directory', { error: err.message });
-});
+fs.mkdir(uploadDir, { recursive: true })
+  .then(async () => {
+    try {
+      const testFile = path.join(uploadDir, '.test-write');
+      await fs.writeFile(testFile, 'test');
+      await fs.unlink(testFile);
+      logger.info('Upload directory created and writable', { path: uploadDir });
+    } catch (err) {
+      logger.error('Upload directory not writable', { error: err.message, path: uploadDir });
+    }
+  })
+  .catch(err => {
+    logger.error('Failed to create uploads directory', { error: err.message });
+  });
 
 // Configure multer for file uploads
 const storage = multer.diskStorage({
@@ -26,8 +37,7 @@ const storage = multer.diskStorage({
     cb(null, uploadDir);
   },
   filename: (req, file, cb) => {
-    const ext = path.extname(file.originalname);
-    cb(null, `${file.fieldname}-${Date.now()}${ext}`);
+    cb(null, `${Date.now()}-${file.originalname}`);
   },
 });
 
@@ -81,17 +91,8 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Serve the 'uploads' directory for images, handling query parameters
-app.use('/public/uploads', (req, res, next) => {
-  const filePath = path.join(uploadDir, req.path.split('?')[0]); // Ignore query parameters
-  fs.access(filePath)
-    .then(() => {
-      res.sendFile(filePath);
-    })
-    .catch(() => {
-      next(); // Pass to 404 handler if file not found
-    });
-});
+// Serve the 'uploads' directory for images, handling both /uploads and /Uploads
+app.use(['/uploads', '/Uploads'], cors(corsOptions), express.static(path.join(__dirname, 'public/uploads')));
 
 // JWT Middleware
 app.use((req, res, next) => {
