@@ -16,10 +16,12 @@ const validateQueryParams = [
   query('end_date').optional().isISO8601().withMessage('end_date must be a valid ISO8601 date'),
   query('category_id').optional().isInt({ min: 1 }).withMessage('category_id must be a positive integer'),
   query('order_type').optional().isIn(['local', 'delivery']).withMessage('order_type must be "local" or "delivery"'),
+  query('start_hour').optional().matches(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/).withMessage('start_hour must be in HH:mm format'),
+  query('end_hour').optional().matches(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/).withMessage('end_hour must be in HH:mm format'),
 ];
 
-// Helper function to build dynamic WHERE clauses for time filtering
-const buildTimeFilter = (startDate, endDate, tableAlias) => {
+// Helper function to build dynamic WHERE clauses for time and hour filtering
+const buildTimeFilter = (startDate, endDate, startHour, endHour, tableAlias) => {
   const conditions = [];
   const params = [];
 
@@ -56,6 +58,26 @@ const buildTimeFilter = (startDate, endDate, tableAlias) => {
     }
   }
 
+  if (startHour && startHour !== 'undefined') {
+    try {
+      conditions.push(`HOUR(${tableAlias}.created_at) >= ?`);
+      params.push(parseInt(startHour.split(':')[0]));
+    } catch (err) {
+      logger.error('Invalid start hour format', { startHour, error: err.message });
+      throw new Error('Invalid start hour format');
+    }
+  }
+
+  if (endHour && endHour !== 'undefined') {
+    try {
+      conditions.push(`HOUR(${tableAlias}.created_at) <= ?`);
+      params.push(parseInt(endHour.split(':')[0]));
+    } catch (err) {
+      logger.error('Invalid end hour format', { endHour, error: err.message });
+      throw new Error('Invalid end hour format');
+    }
+  }
+
   return { conditions, params };
 };
 
@@ -67,7 +89,7 @@ router.get('/analytics-overview', validateQueryParams, async (req, res) => {
     return res.status(400).json({ errors: errors.array() });
   }
 
-  const { start_date, end_date, category_id, order_type } = req.query;
+  const { start_date, end_date, category_id, order_type, start_hour, end_hour } = req.query;
 
   try {
     if (!req.user) {
@@ -82,7 +104,7 @@ router.get('/analytics-overview', validateQueryParams, async (req, res) => {
     logger.debug('Fetching analytics with query:', { query: req.query });
 
     // Build time filter for orders
-    const orderTimeFilter = buildTimeFilter(start_date, end_date, 'o');
+    const orderTimeFilter = buildTimeFilter(start_date, end_date, start_hour, end_hour, 'o');
     let orderWhereClause = orderTimeFilter.conditions.length > 0 ? `WHERE ${orderTimeFilter.conditions.join(' AND ')}` : '';
     let orderParams = [...orderTimeFilter.params];
 
@@ -108,7 +130,7 @@ router.get('/analytics-overview', validateQueryParams, async (req, res) => {
       previousEndDate = new Date(start.getTime() - 1000);
       previousStartDate = new Date(previousEndDate.getTime() - diff);
     }
-    const prevOrderTimeFilter = buildTimeFilter(previousStartDate, previousEndDate, 'o');
+    const prevOrderTimeFilter = buildTimeFilter(previousStartDate, previousEndDate, start_hour, end_hour, 'o');
     let prevOrderWhereClause = prevOrderTimeFilter.conditions.length > 0 ? `WHERE ${prevOrderTimeFilter.conditions.join(' AND ')}` : '';
     let prevOrderParams = [...prevOrderTimeFilter.params];
     if (order_type) {
@@ -198,7 +220,7 @@ router.get('/analytics-overview', validateQueryParams, async (req, res) => {
     }));
 
     // Table Reservation Status
-    const reservationTimeFilter = buildTimeFilter(start_date, end_date, 'r');
+    const reservationTimeFilter = buildTimeFilter(start_date, end_date, start_hour, end_hour, 'r');
     let reservationWhereClause = reservationTimeFilter.conditions.length > 0 ? `WHERE ${reservationTimeFilter.conditions.join(' AND ')}` : '';
     let reservationParams = [...reservationTimeFilter.params];
     logger.debug('Querying reservations:', { query: `SELECT r.id, r.table_id, t.table_number, r.reservation_time, r.phone_number, r.status FROM reservations r JOIN tables t ON r.table_id = t.id ${reservationWhereClause} ORDER BY r.reservation_time DESC LIMIT 10`, params: reservationParams });
