@@ -66,7 +66,7 @@ const allowedOrigins = [
 const corsOptions = {
   origin: (origin, callback) => {
     if (!origin || allowedOrigins.some(allowed => typeof allowed === 'string' ? allowed === origin : allowed.test(origin))) {
-      callback(null, origin || allowedOrigins[0]); // Dynamically set the origin
+      callback(null, origin || allowedOrigins[0]); // Reflect requesting origin
     } else {
       logger.warn('CORS blocked', { origin });
       callback(new Error('Not allowed by CORS'));
@@ -92,7 +92,7 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Serve the 'uploads' directory for images, handling both /uploads and /Uploads
+// Serve the 'uploads' directory for images
 app.use(['/uploads', '/Uploads'], cors(corsOptions), express.static(path.join(__dirname, 'public/uploads')));
 
 // JWT Middleware
@@ -179,7 +179,7 @@ app.use('/api', (req, res, next) => {
   next();
 });
 
-// Debug route to list all files in uploads directory
+// Debug route
 app.get('/api/debug/uploads', async (req, res) => {
   try {
     const files = await fs.readdir(uploadDir);
