@@ -59,14 +59,14 @@ app.set('upload', upload);
 
 // Configure allowed origins for CORS
 const allowedOrigins = [
-  'https://coffe-front.vercel.app', // Updated to match your frontend URL
+  'https://coffe-front.vercel.app',
   ...(process.env.NODE_ENV === 'development' ? ['http://localhost:5173', 'http://192.168.1.6:5173', /^http:\/\/192\.168\.1\.\d{1,3}:5173$/] : []),
 ];
 
 const corsOptions = {
   origin: (origin, callback) => {
     if (!origin || allowedOrigins.some(allowed => typeof allowed === 'string' ? allowed === origin : allowed.test(origin))) {
-      callback(null, true);
+      callback(null, origin || allowedOrigins[0]); // Dynamically set the origin
     } else {
       logger.warn('CORS blocked', { origin });
       callback(new Error('Not allowed by CORS'));
