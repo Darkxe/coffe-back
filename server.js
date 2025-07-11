@@ -59,8 +59,12 @@ app.set('upload', upload);
 
 // Configure allowed origins for CORS
 const allowedOrigins = [
-  process.env.CLIENT_URL || 'https://coffe-front.vercel.app/',
-  ...(process.env.NODE_ENV === 'development' ? ['http://localhost:5173', 'http://192.168.1.6:5173', /^http:\/\/192\.168\.1\.\d{1,3}:5173$/] : []),
+  'https://coffe-front.vercel.app', // Updated to match frontend URL
+  ...(process.env.NODE_ENV === 'development' ? [
+    'http://localhost:5173',
+    'http://192.168.1.6:5173',
+    /^http:\/\/192\.168\.1\.\d{1,3}:5173$/
+  ] : []),
 ];
 
 const corsOptions = {
@@ -75,13 +79,33 @@ const corsOptions = {
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Session-Id'],
   credentials: true,
+  optionsSuccessStatus: 204, // Handle preflight requests correctly
 };
 
 app.use(cors(corsOptions));
 
+// Log all incoming requests for debugging
+app.use((req, res, next) => {
+  logger.info('Incoming request', {
+    method: req.method,
+    url: req.url,
+    origin: req.headers.origin,
+    headers: req.headers,
+  });
+  next();
+});
+
 const io = new Server(server, {
   cors: {
-    ...corsOptions,
+    origin: (origin, callback) => {
+      if (!origin || allowedOrigins.some(allowed => typeof allowed === 'string' ? allowed === origin : allowed.test(origin))) {
+        callback(null, true);
+      } else {
+        logger.warn('WebSocket CORS blocked', { origin });
+        callback(new Error('Not allowed by CORS'));
+      }
+    },
+    methods: ['GET', 'POST'],
     credentials: true,
   },
   path: '/socket.io/',
@@ -104,7 +128,7 @@ app.use((req, res, next) => {
       return next();
     }
     try {
-      const decoded = jwt.verify(token, process.env.JWT_SECRET || 'your_jwt_secret_key');
+      const decoded = jwt.verify(token, process.env.JWT_SECRET || 'Karim123@');
       req.user = decoded;
       logger.debug('JWT verified', { userId: decoded.id, email: decoded.email });
     } catch (error) {
@@ -113,12 +137,6 @@ app.use((req, res, next) => {
   } else {
     logger.debug('No token provided in request', { path: req.url });
   }
-  logger.info('Incoming request', {
-    method: req.method,
-    url: req.url,
-    user: req.user ? req.user.id : 'anonymous',
-    origin: req.headers.origin,
-  });
   next();
 });
 
@@ -263,7 +281,7 @@ io.on('connection', (socket) => {
         return;
       }
       try {
-        const decoded = jwt.verify(token, process.env.JWT_SECRET || 'your_jwt_secret_key');
+        const decoded = jwt.verify(token, process.env.JWT_SECRET || 'Karim123@');
         const [rows] = await db.query('SELECT role FROM users WHERE id = ?', [decoded.id]);
         if (rows.length > 0 && ['admin', 'server'].includes(rows[0].role)) {
           socket.join('staff-notifications');
