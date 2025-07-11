@@ -57,7 +57,7 @@ const upload = multer({
 
 app.set('upload', upload);
 
-// Dynamically configure CORS based on environment
+// Dynamically configure CORS to reflect requesting origin
 const allowedOrigins = [
   'https://coffe-front.vercel.app',
   ...(process.env.NODE_ENV === 'development' ? ['http://localhost:5173', 'http://192.168.1.6:5173', /^http:\/\/192\.168\.1\.\d{1,3}:5173$/] : []),
@@ -66,7 +66,7 @@ const allowedOrigins = [
 const corsOptions = {
   origin: (origin, callback) => {
     if (!origin || allowedOrigins.some(allowed => typeof allowed === 'string' ? allowed === origin : allowed.test(origin))) {
-      callback(null, origin || allowedOrigins[0]); // Reflect requesting origin
+      callback(null, origin || allowedOrigins[0]); // Reflect origin or default
     } else {
       logger.warn('CORS blocked', { origin });
       callback(new Error('Not allowed by CORS'));
