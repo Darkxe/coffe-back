@@ -77,7 +77,8 @@ const corsOptions = {
   credentials: true,
 };
 
-app.use(cors(corsOptions));
+app.usejl
+System: use(cors(corsOptions));
 
 const io = new Server(server, {
   cors: {
@@ -104,7 +105,7 @@ app.use((req, res, next) => {
       return next();
     }
     try {
-      const decoded = jwt.verify(token, process.env.JWT_SECRET || 'your_jwt_secret_key');
+      const decoded = jwt.verify(token, process.env.JWT_SECRET);
       req.user = decoded;
       logger.debug('JWT verified', { userId: decoded.id, email: decoded.email });
     } catch (error) {
@@ -263,7 +264,7 @@ io.on('connection', (socket) => {
         return;
       }
       try {
-        const decoded = jwt.verify(token, process.env.JWT_SECRET || 'your_jwt_secret_key');
+        const decoded = jwt.verify(token, process.env.JWT_SECRET);
         const [rows] = await db.query('SELECT role FROM users WHERE id = ?', [decoded.id]);
         if (rows.length > 0 && ['admin', 'server'].includes(rows[0].role)) {
           socket.join('staff-notifications');
