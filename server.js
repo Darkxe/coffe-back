@@ -14,7 +14,7 @@ const multer = require('multer');
 const app = express();
 const server = http.createServer(app);
 
-// Use mounted volume path for uploads
+// Ensure upload directory is writable
 const uploadDir = '/app/public/uploads';
 fs.mkdir(uploadDir, { recursive: true })
   .then(async () => {
@@ -57,7 +57,7 @@ const upload = multer({
 
 app.set('upload', upload);
 
-// Simplified CORS configuration
+// CORS configuration
 const corsOptions = {
   origin: ['https://coffe-front.vercel.app', 'http://localhost:5173'],
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
@@ -115,6 +115,7 @@ app.use((req, res, next) => {
 
 // Health check endpoint
 app.get('/health', (req, res) => {
+  logger.info('Health check requested');
   res.status(200).json({ status: 'OK', environment: process.env.NODE_ENV || 'production' });
 });
 
@@ -208,14 +209,6 @@ function logRoutes() {
 logRoutes();
 
 app.use((err, req, res, next) => {
-  if (err.code === 'ECONNABORTED') {
-    logger.error('Request aborted', {
-      method: req.method,
-      url: req.url,
-      user: req.user ? req.user.id : 'anonymous',
-      origin: req.headers.origin,
-    });
-  }
   logger.error('Server error', {
     error: err.message,
     stack: err.stack,
@@ -284,7 +277,8 @@ io.on('connection', (socket) => {
 const PORT = process.env.PORT || 5000;
 server.listen(PORT, '0.0.0.0', async () => {
   try {
-    await db.getConnection();
+    const [rows] = await db.query('SELECT 1');
+    logger.info('Database connection successful', { result: rows });
     logger.info(`Server running on port ${PORT} in ${process.env.NODE_ENV || 'production'} environment`);
   } catch (error) {
     logger.error('Failed to connect to database', { error: error.message });
@@ -299,4 +293,5 @@ process.on('uncaughtException', (err) => {
 
 process.on('unhandledRejection', (reason, promise) => {
   logger.error('Unhandled Rejection', { reason: reason.message || reason, promise });
+  process.exit(1);
 });
