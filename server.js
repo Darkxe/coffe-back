@@ -59,7 +59,7 @@ app.set('upload', upload);
 
 // Configure allowed origins for CORS
 const allowedOrigins = [
-  process.env.CLIENT_URL || 'https://coffe-front-production.up.railway.app',
+  'https://coffe-front.vercel.app', // Updated to match your frontend URL
   ...(process.env.NODE_ENV === 'development' ? ['http://localhost:5173', 'http://192.168.1.6:5173', /^http:\/\/192\.168\.1\.\d{1,3}:5173$/] : []),
 ];
 
@@ -75,6 +75,7 @@ const corsOptions = {
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Session-Id'],
   credentials: true,
+  optionsSuccessStatus: 200,
 };
 
 app.use(cors(corsOptions));
