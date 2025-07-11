@@ -31,7 +31,7 @@ fs.mkdir(uploadDir, { recursive: true })
     logger.error('Failed to create uploads directory', { error: err.message });
   });
 
-// Configure multer for file uploads
+// Configure multer
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
     cb(null, uploadDir);
@@ -52,7 +52,7 @@ const upload = multer({
     }
     cb(new Error('Only .jpg, .jpeg, .png, and .ico files are allowed'));
   },
-  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB
 });
 
 app.set('upload', upload);
@@ -76,6 +76,13 @@ app.use((req, res, next) => {
     headers: req.headers,
     origin: req.headers.origin,
   });
+  res.on('finish', () => {
+    logger.info('Response sent', {
+      method: req.method,
+      url: req.url,
+      status: res.statusCode,
+    });
+  });
   next();
 });
 
@@ -87,9 +94,7 @@ const io = new Server(server, {
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, 'public')));
-
-// Serve the 'uploads' directory for images
-app.use(['/uploads', '/Uploads'], express.static(uploadDir));
+app.use('/uploads', express.static(uploadDir));
 
 // JWT Middleware
 app.use((req, res, next) => {
@@ -105,15 +110,15 @@ app.use((req, res, next) => {
       req.user = decoded;
       logger.debug('JWT verified', { userId: decoded.id, email: decoded.email });
     } catch (error) {
-      logger.warn('Invalid JWT', { error: error.message, token: token.substring(0, 10) + '...' });
+      logger.warn('Invalid JWT', { error: error.message });
     }
   } else {
-    logger.debug('No token provided in request', { path: req.url });
+    logger.debug('No token provided', { path: req.url });
   }
   next();
 });
 
-// Health check endpoint
+// Health check
 app.get('/health', (req, res) => {
   logger.info('Health check requested');
   res.status(200).json({ status: 'OK', environment: process.env.NODE_ENV || 'production' });
@@ -142,7 +147,7 @@ app.use('/api', bannerRoutes);
 app.use('/api', breakfastRoutes);
 app.use('/api', themeRoutes);
 
-// Apply validations middleware
+// Validations middleware
 app.use('/api', (req, res, next) => {
   if (
     req.method === 'POST' ||
@@ -170,18 +175,19 @@ app.use('/api', (req, res, next) => {
   next();
 });
 
-// Debug route to list all files in uploads directory
+// Debug uploads
 app.get('/api/debug/uploads', async (req, res) => {
   try {
     const files = await fs.readdir(uploadDir);
-    logger.info('Listing files in uploads directory', { files, uploadDir });
+    logger.info('Listing uploads', { files });
     res.json({ files });
   } catch (error) {
-    logger.error('Error listing uploads directory', { error: error.message });
-    res.status(500).json({ error: 'Failed to list uploads directory' });
+    logger.error('Error listing uploads', { error: error.message });
+    res.status(500).json({ error: 'Failed to list uploads' });
   }
 });
 
+// Log registered routes
 function logRoutes() {
   app._router?.stack?.forEach((layer) => {
     if (layer.route) {
@@ -214,57 +220,44 @@ app.use((err, req, res, next) => {
     stack: err.stack,
     method: req.method,
     url: req.url,
-    user: req.user ? req.user.id : 'anonymous',
-    origin: req.headers.origin,
   });
   res.status(500).json({ error: 'Internal server error' });
 });
 
 app.use((req, res) => {
-  logger.warn('Route not found', {
-    method: req.method,
-    url: req.url,
-    user: req.user ? req.user.id : 'anonymous',
-    origin: req.headers.origin,
-  });
+  logger.warn('Route not found', { method: req.method, url: req.url });
   res.status(404).json({ error: 'Not found' });
 });
 
 io.on('connection', (socket) => {
   logger.info('New socket connection', { id: socket.id });
-
   socket.on('join-session', async (data) => {
     const { token, sessionId } = data;
     if (!token && !sessionId) {
-      logger.warn('No token or sessionId provided for socket session', { socketId: socket.id });
-      socket.emit('auth-error', { message: 'No token or session ID provided' });
+      logger.warn('No token or sessionId for socket', { socketId: socket.id });
+      socket.emit('auth-error', { message: 'No token or session ID' });
       return;
     }
     if (token) {
-      if (typeof token !== 'string' || !token.trim()) {
-        logger.warn('Invalid token provided for socket session', { socketId: socket.id });
-        socket.emit('auth-error', { message: 'Invalid or empty token' });
-        return;
-      }
       try {
         const decoded = jwt.verify(token, process.env.JWT_SECRET || 'your_jwt_secret_key');
         const [rows] = await db.query('SELECT role FROM users WHERE id = ?', [decoded.id]);
         if (rows.length > 0 && ['admin', 'server'].includes(rows[0].role)) {
           socket.join('staff-notifications');
-          logger.info('Socket joined staff-notifications room', { socketId: socket.id, userId: decoded.id, role: rows[0].role });
+          logger.info('Socket joined staff-notifications', { socketId: socket.id, userId: decoded.id });
         } else {
-          logger.warn('Unauthorized socket join attempt', { socketId: socket.id, userId: decoded.id });
-          socket.emit('auth-error', { message: 'Unauthorized access' });
+          logger.warn('Unauthorized socket join', { socketId: socket.id });
+          socket.emit('auth-error', { message: 'Unauthorized' });
         }
       } catch (error) {
-        logger.warn('Invalid JWT for socket session', { error: error.message, socketId: socket.id });
-        socket.emit('auth-error', { message: 'Invalid or expired token' });
+        logger.warn('Invalid JWT for socket', { error: error.message });
+        socket.emit('auth-error', { message: 'Invalid token' });
       }
     } else if (sessionId && typeof sessionId === 'string' && sessionId.trim()) {
       socket.join(`guest-${sessionId}`);
       logger.info('Guest socket joined', { socketId: socket.id, sessionId });
     } else {
-      logger.warn('Invalid sessionId for socket session', { socketId: socket.id });
+      logger.warn('Invalid sessionId', { socketId: socket.id });
       socket.emit('auth-error', { message: 'Invalid session ID' });
     }
   });
@@ -277,11 +270,17 @@ io.on('connection', (socket) => {
 const PORT = process.env.PORT || 5000;
 server.listen(PORT, '0.0.0.0', async () => {
   try {
+    logger.info('Attempting database connection', {
+      host: process.env.DB_HOST,
+      port: process.env.DB_PORT,
+      user: process.env.DB_USER,
+      database: process.env.DB_NAME,
+    });
     const [rows] = await db.query('SELECT 1');
     logger.info('Database connection successful', { result: rows });
-    logger.info(`Server running on port ${PORT} in ${process.env.NODE_ENV || 'production'} environment`);
+    logger.info(`Server running on http://0.0.0.0:${PORT} in ${process.env.NODE_ENV || 'production'}`);
   } catch (error) {
-    logger.error('Failed to connect to database', { error: error.message });
+    logger.error('Failed to connect to database', { error: error.message, stack: error.stack });
     process.exit(1);
   }
 });
