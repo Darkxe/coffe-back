@@ -77,8 +77,7 @@ const corsOptions = {
   credentials: true,
 };
 
-app.usejl
-System: use(cors(corsOptions));
+app.use(cors(corsOptions));
 
 const io = new Server(server, {
   cors: {
