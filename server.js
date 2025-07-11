@@ -57,21 +57,9 @@ const upload = multer({
 
 app.set('upload', upload);
 
-// Dynamically configure CORS to reflect requesting origin
-const allowedOrigins = [
-  'https://coffe-front.vercel.app',
-  ...(process.env.NODE_ENV === 'development' ? ['http://localhost:5173', 'http://192.168.1.6:5173', /^http:\/\/192\.168\.1\.\d{1,3}:5173$/] : []),
-];
-
+// Simplified CORS configuration
 const corsOptions = {
-  origin: (origin, callback) => {
-    if (!origin || allowedOrigins.some(allowed => typeof allowed === 'string' ? allowed === origin : allowed.test(origin))) {
-      callback(null, origin || allowedOrigins[0]); // Reflect origin or default
-    } else {
-      logger.warn('CORS blocked', { origin });
-      callback(new Error('Not allowed by CORS'));
-    }
-  },
+  origin: ['https://coffe-front.vercel.app', 'http://localhost:5173'],
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Session-Id'],
   credentials: true,
@@ -80,11 +68,19 @@ const corsOptions = {
 
 app.use(cors(corsOptions));
 
+// Log all incoming requests
+app.use((req, res, next) => {
+  logger.info('Received request', {
+    method: req.method,
+    url: req.url,
+    headers: req.headers,
+    origin: req.headers.origin,
+  });
+  next();
+});
+
 const io = new Server(server, {
-  cors: {
-    ...corsOptions,
-    credentials: true,
-  },
+  cors: corsOptions,
   path: '/socket.io/',
 });
 
@@ -92,8 +88,8 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Serve the 'uploads' directory for images, handling both /uploads and /Uploads
-app.use(['/uploads', '/Uploads'], cors(corsOptions), express.static(uploadDir));
+// Serve the 'uploads' directory for images
+app.use(['/uploads', '/Uploads'], express.static(uploadDir));
 
 // JWT Middleware
 app.use((req, res, next) => {
@@ -114,12 +110,6 @@ app.use((req, res, next) => {
   } else {
     logger.debug('No token provided in request', { path: req.url });
   }
-  logger.info('Incoming request', {
-    method: req.method,
-    url: req.url,
-    user: req.user ? req.user.id : 'anonymous',
-    origin: req.headers.origin,
-  });
   next();
 });
 
