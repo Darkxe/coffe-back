@@ -14,7 +14,7 @@ const multer = require('multer');
 const app = express();
 const server = http.createServer(app);
 
-// Ensure upload directory is writable
+// Ensure upload directory exists and is writable
 const uploadDir = '/app/public/uploads';
 fs.mkdir(uploadDir, { recursive: true })
   .then(async () => {
@@ -31,7 +31,7 @@ fs.mkdir(uploadDir, { recursive: true })
     logger.error('Failed to create uploads directory', { error: err.message });
   });
 
-// Configure multer
+// Configure multer for file uploads
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
     cb(null, uploadDir);
@@ -52,49 +52,47 @@ const upload = multer({
     }
     cb(new Error('Only .jpg, .jpeg, .png, and .ico files are allowed'));
   },
-  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
 });
 
 app.set('upload', upload);
 
-// CORS configuration
+// Configure allowed origins for CORS
+const allowedOrigins = [
+  process.env.CLIENT_URL || 'https://coffe-front.vercel.app/',
+  ...(process.env.NODE_ENV === 'development' ? ['http://localhost:5173', 'http://192.168.1.6:5173', /^http:\/\/192\.168\.1\.\d{1,3}:5173$/] : []),
+];
+
 const corsOptions = {
-  origin: ['https://coffe-front.vercel.app', 'http://localhost:5173'],
+  origin: (origin, callback) => {
+    if (!origin || allowedOrigins.some(allowed => typeof allowed === 'string' ? allowed === origin : allowed.test(origin))) {
+      callback(null, true);
+    } else {
+      logger.warn('CORS blocked', { origin });
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Session-Id'],
   credentials: true,
-  optionsSuccessStatus: 200,
 };
 
 app.use(cors(corsOptions));
 
-// Log all incoming requests
-app.use((req, res, next) => {
-  logger.info('Received request', {
-    method: req.method,
-    url: req.url,
-    headers: req.headers,
-    origin: req.headers.origin,
-  });
-  res.on('finish', () => {
-    logger.info('Response sent', {
-      method: req.method,
-      url: req.url,
-      status: res.statusCode,
-    });
-  });
-  next();
-});
-
 const io = new Server(server, {
-  cors: corsOptions,
+  cors: {
+    ...corsOptions,
+    credentials: true,
+  },
   path: '/socket.io/',
 });
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, 'public')));
-app.use('/uploads', express.static(uploadDir));
+
+// Serve the 'uploads' directory for images, handling both /uploads and /Uploads
+app.use(['/uploads', '/Uploads'], cors(corsOptions), express.static(path.join(__dirname, 'public/uploads')));
 
 // JWT Middleware
 app.use((req, res, next) => {
@@ -110,17 +108,22 @@ app.use((req, res, next) => {
       req.user = decoded;
       logger.debug('JWT verified', { userId: decoded.id, email: decoded.email });
     } catch (error) {
-      logger.warn('Invalid JWT', { error: error.message });
+      logger.warn('Invalid JWT', { error: error.message, token: token.substring(0, 10) + '...' });
     }
   } else {
-    logger.debug('No token provided', { path: req.url });
+    logger.debug('No token provided in request', { path: req.url });
   }
+  logger.info('Incoming request', {
+    method: req.method,
+    url: req.url,
+    user: req.user ? req.user.id : 'anonymous',
+    origin: req.headers.origin,
+  });
   next();
 });
 
-// Health check
+// Health check endpoint
 app.get('/health', (req, res) => {
-  logger.info('Health check requested');
   res.status(200).json({ status: 'OK', environment: process.env.NODE_ENV || 'production' });
 });
 
@@ -147,7 +150,7 @@ app.use('/api', bannerRoutes);
 app.use('/api', breakfastRoutes);
 app.use('/api', themeRoutes);
 
-// Validations middleware
+// Apply validations middleware
 app.use('/api', (req, res, next) => {
   if (
     req.method === 'POST' ||
@@ -175,19 +178,18 @@ app.use('/api', (req, res, next) => {
   next();
 });
 
-// Debug uploads
+// Debug route to list all files in uploads directory
 app.get('/api/debug/uploads', async (req, res) => {
   try {
     const files = await fs.readdir(uploadDir);
-    logger.info('Listing uploads', { files });
+    logger.info('Listing files in uploads directory', { files, uploadDir });
     res.json({ files });
   } catch (error) {
-    logger.error('Error listing uploads', { error: error.message });
-    res.status(500).json({ error: 'Failed to list uploads' });
+    logger.error('Error listing uploads directory', { error: error.message });
+    res.status(500).json({ error: 'Failed to list uploads directory' });
   }
 });
 
-// Log registered routes
 function logRoutes() {
   app._router?.stack?.forEach((layer) => {
     if (layer.route) {
@@ -215,49 +217,70 @@ function logRoutes() {
 logRoutes();
 
 app.use((err, req, res, next) => {
+  if (err.code === 'ECONNABORTED') {
+    logger.error('Request aborted', {
+      method: req.method,
+      url: req.url,
+      user: req.user ? req.user.id : 'anonymous',
+      origin: req.headers.origin,
+    });
+  }
   logger.error('Server error', {
     error: err.message,
     stack: err.stack,
     method: req.method,
     url: req.url,
+    user: req.user ? req.user.id : 'anonymous',
+    origin: req.headers.origin,
   });
   res.status(500).json({ error: 'Internal server error' });
 });
 
 app.use((req, res) => {
-  logger.warn('Route not found', { method: req.method, url: req.url });
+  logger.warn('Route not found', {
+    method: req.method,
+    url: req.url,
+    user: req.user ? req.user.id : 'anonymous',
+    origin: req.headers.origin,
+  });
   res.status(404).json({ error: 'Not found' });
 });
 
 io.on('connection', (socket) => {
   logger.info('New socket connection', { id: socket.id });
+
   socket.on('join-session', async (data) => {
     const { token, sessionId } = data;
     if (!token && !sessionId) {
-      logger.warn('No token or sessionId for socket', { socketId: socket.id });
-      socket.emit('auth-error', { message: 'No token or session ID' });
+      logger.warn('No token or sessionId provided for socket session', { socketId: socket.id });
+      socket.emit('auth-error', { message: 'No token or session ID provided' });
       return;
     }
     if (token) {
+      if (typeof token !== 'string' || !token.trim()) {
+        logger.warn('Invalid token provided for socket session', { socketId: socket.id });
+        socket.emit('auth-error', { message: 'Invalid or empty token' });
+        return;
+      }
       try {
         const decoded = jwt.verify(token, process.env.JWT_SECRET || 'your_jwt_secret_key');
         const [rows] = await db.query('SELECT role FROM users WHERE id = ?', [decoded.id]);
         if (rows.length > 0 && ['admin', 'server'].includes(rows[0].role)) {
           socket.join('staff-notifications');
-          logger.info('Socket joined staff-notifications', { socketId: socket.id, userId: decoded.id });
+          logger.info('Socket joined staff-notifications room', { socketId: socket.id, userId: decoded.id, role: rows[0].role });
         } else {
-          logger.warn('Unauthorized socket join', { socketId: socket.id });
-          socket.emit('auth-error', { message: 'Unauthorized' });
+          logger.warn('Unauthorized socket join attempt', { socketId: socket.id, userId: decoded.id });
+          socket.emit('auth-error', { message: 'Unauthorized access' });
         }
       } catch (error) {
-        logger.warn('Invalid JWT for socket', { error: error.message });
-        socket.emit('auth-error', { message: 'Invalid token' });
+        logger.warn('Invalid JWT for socket session', { error: error.message, socketId: socket.id });
+        socket.emit('auth-error', { message: 'Invalid or expired token' });
       }
     } else if (sessionId && typeof sessionId === 'string' && sessionId.trim()) {
       socket.join(`guest-${sessionId}`);
       logger.info('Guest socket joined', { socketId: socket.id, sessionId });
     } else {
-      logger.warn('Invalid sessionId', { socketId: socket.id });
+      logger.warn('Invalid sessionId for socket session', { socketId: socket.id });
       socket.emit('auth-error', { message: 'Invalid session ID' });
     }
   });
@@ -270,17 +293,10 @@ io.on('connection', (socket) => {
 const PORT = process.env.PORT || 5000;
 server.listen(PORT, '0.0.0.0', async () => {
   try {
-    logger.info('Attempting database connection', {
-      host: process.env.DB_HOST,
-      port: process.env.DB_PORT,
-      user: process.env.DB_USER,
-      database: process.env.DB_NAME,
-    });
-    const [rows] = await db.query('SELECT 1');
-    logger.info('Database connection successful', { result: rows });
-    logger.info(`Server running on http://0.0.0.0:${PORT} in ${process.env.NODE_ENV || 'production'}`);
+    await db.getConnection();
+    logger.info(`Server running on port ${PORT} in ${process.env.NODE_ENV || 'production'} environment`);
   } catch (error) {
-    logger.error('Failed to connect to database', { error: error.message, stack: error.stack });
+    logger.error('Failed to connect to database', { error: error.message });
     process.exit(1);
   }
 });
@@ -292,5 +308,4 @@ process.on('uncaughtException', (err) => {
 
 process.on('unhandledRejection', (reason, promise) => {
   logger.error('Unhandled Rejection', { reason: reason.message || reason, promise });
-  process.exit(1);
 });
