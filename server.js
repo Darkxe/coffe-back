@@ -62,6 +62,7 @@ const allowedOrigins = [
   process.env.CLIENT_URL || 'https://coffe-front-production.up.railway.app',
   'https://coffe-front-git-main-karims-projects-9c4bc5fb.vercel.app',
   'https://coffe-front.vercel.app',
+  'https://coffe-front-d0shxo4i6-karims-projects-9c4bc5fb.vercel.app', // Added new URL
   ...(process.env.NODE_ENV === 'development' ? [
     'http://localhost:5173',
     'http://192.168.1.6:5173',
@@ -78,7 +79,7 @@ const corsOptions = {
       callback(new Error('Not allowed by CORS'));
     }
   },
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'], // Ensure OPTIONS is included
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Session-Id'],
   credentials: true,
 };
