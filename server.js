@@ -14,6 +14,16 @@ const multer = require('multer');
 const app = express();
 const server = http.createServer(app);
 
+// Validate critical environment variables
+const JWT_SECRET = process.env.JWT_SECRET || 'your_jwt_secret_key';
+if (!process.env.JWT_SECRET) {
+  logger.warn('JWT_SECRET not set, using default value');
+}
+const CLIENT_URL = process.env.CLIENT_URL || 'https://coffe-front-production-c5bf.up.railway.app';
+if (!process.env.CLIENT_URL) {
+  logger.warn('CLIENT_URL not set, defaulting to production frontend URL');
+}
+
 // Ensure upload directory exists and is writable
 const uploadDir = '/app/public/uploads';
 fs.mkdir(uploadDir, { recursive: true })
@@ -59,13 +69,18 @@ app.set('upload', upload);
 
 // Configure allowed origins for CORS
 const allowedOrigins = [
-  process.env.CLIENT_URL || 'https://coffe-front-production-c5bf.up.railway.app',
-  ...(process.env.NODE_ENV === 'development' ? ['http://localhost:5173', 'http://192.168.1.6:5173', /^http:\/\/192\.168\.1\.\d{1,3}:5173$/] : []),
+  CLIENT_URL,
+  ...(process.env.NODE_ENV === 'development' ? [
+    'http://localhost:5173',
+    'http://192.168.1.6:5173',
+    /^http:\/\/192\.168\.1\.\d{1,3}:5173$/
+  ] : []),
 ];
 
 const corsOptions = {
   origin: (origin, callback) => {
     if (!origin || allowedOrigins.some(allowed => typeof allowed === 'string' ? allowed === origin : allowed.test(origin))) {
+      logger.debug('CORS allowed', { origin });
       callback(null, true);
     } else {
       logger.warn('CORS blocked', { origin });
@@ -79,9 +94,12 @@ const corsOptions = {
 
 app.use(cors(corsOptions));
 
+// Configure Socket.IO with CORS
 const io = new Server(server, {
   cors: {
-    ...corsOptions,
+    origin: allowedOrigins,
+    methods: ['GET', 'POST'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Session-Id'],
     credentials: true,
   },
   path: '/socket.io/',
@@ -91,8 +109,8 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Serve the 'uploads' directory for images, handling both /uploads and /Uploads
-app.use(['/uploads', '/Uploads'], cors(corsOptions), express.static(path.join(__dirname, 'public/uploads')));
+// Serve the 'uploads' directory for images
+app.use(['/uploads', '/Uploads'], express.static(path.join(__dirname, 'public/uploads')));
 
 // JWT Middleware
 app.use((req, res, next) => {
@@ -100,18 +118,16 @@ app.use((req, res, next) => {
   if (authHeader && authHeader.startsWith('Bearer ')) {
     const token = authHeader.split(' ')[1];
     if (!token || token === 'null' || token === 'undefined' || !token.trim()) {
-      logger.warn('Empty or invalid token received', { token: token || 'none' });
+      logger.debug('Empty or invalid token received', { token: token || 'none', url: req.url });
       return next();
     }
     try {
-      const decoded = jwt.verify(token, process.env.JWT_SECRET || 'your_jwt_secret_key');
+      const decoded = jwt.verify(token, JWT_SECRET);
       req.user = decoded;
-      logger.debug('JWT verified', { userId: decoded.id, email: decoded.email });
+      logger.debug('JWT verified', { userId: decoded.id, email: decoded.email, url: req.url });
     } catch (error) {
-      logger.warn('Invalid JWT', { error: error.message, token: token.substring(0, 10) + '...' });
+      logger.warn('Invalid JWT', { error: error.message, token: token.substring(0, 10) + '...', url: req.url });
     }
-  } else {
-    logger.debug('No token provided in request', { path: req.url });
   }
   logger.info('Incoming request', {
     method: req.method,
@@ -216,6 +232,7 @@ function logRoutes() {
 
 logRoutes();
 
+// Error handling middleware
 app.use((err, req, res, next) => {
   if (err.code === 'ECONNABORTED') {
     logger.error('Request aborted', {
@@ -224,6 +241,10 @@ app.use((err, req, res, next) => {
       user: req.user ? req.user.id : 'anonymous',
       origin: req.headers.origin,
     });
+    return res.status(408).json({ error: 'Request timeout' });
+  }
+  if (err.message === 'Not allowed by CORS') {
+    return res.status(403).json({ error: 'CORS policy violation' });
   }
   logger.error('Server error', {
     error: err.message,
@@ -236,6 +257,7 @@ app.use((err, req, res, next) => {
   res.status(500).json({ error: 'Internal server error' });
 });
 
+// 404 handler
 app.use((req, res) => {
   logger.warn('Route not found', {
     method: req.method,
@@ -246,6 +268,7 @@ app.use((req, res) => {
   res.status(404).json({ error: 'Not found' });
 });
 
+// Socket.IO connection handling
 io.on('connection', (socket) => {
   logger.info('New socket connection', { id: socket.id });
 
@@ -263,7 +286,7 @@ io.on('connection', (socket) => {
         return;
       }
       try {
-        const decoded = jwt.verify(token, process.env.JWT_SECRET || 'your_jwt_secret_key');
+        const decoded = jwt.verify(token, JWT_SECRET);
         const [rows] = await db.query('SELECT role FROM users WHERE id = ?', [decoded.id]);
         if (rows.length > 0 && ['admin', 'server'].includes(rows[0].role)) {
           socket.join('staff-notifications');
