@@ -79,6 +79,7 @@ const allowedOrigins = [
 
 const corsOptions = {
   origin: (origin, callback) => {
+    logger.debug('CORS check', { origin, allowedOrigins });
     if (!origin || allowedOrigins.some(allowed => typeof allowed === 'string' ? allowed === origin : allowed.test(origin))) {
       logger.debug('CORS allowed', { origin });
       callback(null, true);
@@ -97,7 +98,15 @@ app.use(cors(corsOptions));
 // Configure Socket.IO with CORS
 const io = new Server(server, {
   cors: {
-    origin: allowedOrigins,
+    origin: (origin, callback) => {
+      logger.debug('Socket.IO CORS check', { origin, allowedOrigins });
+      if (!origin || allowedOrigins.some(allowed => typeof allowed === 'string' ? allowed === origin : allowed.test(origin))) {
+        callback(null, true);
+      } else {
+        logger.warn('Socket.IO CORS blocked', { origin });
+        callback(new Error('Not allowed by CORS'));
+      }
+    },
     methods: ['GET', 'POST'],
     allowedHeaders: ['Content-Type', 'Authorization', 'X-Session-Id'],
     credentials: true,
@@ -112,7 +121,7 @@ app.use(express.static(path.join(__dirname, 'public')));
 // Serve the 'uploads' directory for images
 app.use(['/uploads', '/Uploads'], express.static(path.join(__dirname, 'public/uploads')));
 
-// JWT Middleware
+// JWT Middleware (only for protected routes)
 app.use((req, res, next) => {
   const authHeader = req.headers.authorization;
   if (authHeader && authHeader.startsWith('Bearer ')) {
@@ -166,20 +175,29 @@ app.use('/api', bannerRoutes);
 app.use('/api', breakfastRoutes);
 app.use('/api', themeRoutes);
 
-// Apply validations middleware
+// Apply validations middleware only for protected endpoints
 app.use('/api', (req, res, next) => {
+  // Skip validation for public GET endpoints
+  if (req.method === 'GET' && (
+    req.path.includes('/menu-items') ||
+    req.path.includes('/categories') ||
+    req.path.includes('/banners') ||
+    req.path.includes('/breakfasts') ||
+    req.path.includes('/promotions') ||
+    req.path.includes('/theme')
+  )) {
+    logger.debug('Skipping validation for public GET endpoint', { path: req.path });
+    return next();
+  }
+
   if (
     req.method === 'POST' ||
     req.method === 'PUT' ||
     req.method === 'DELETE' ||
     (req.method === 'GET' && (
-      req.path.includes('/menu-items') ||
-      req.path.includes('/categories') ||
       req.path.includes('/ratings') ||
       req.path.includes('/tables') ||
-      req.path.includes('/notifications') ||
-      req.path.includes('/banners') ||
-      req.path.includes('/breakfasts')
+      req.path.includes('/notifications')
     ))
   ) {
     if (req.path.includes('/menu-items') || req.path.includes('/categories') || req.path.includes('/banners') || req.path.includes('/breakfasts')) {
@@ -244,6 +262,7 @@ app.use((err, req, res, next) => {
     return res.status(408).json({ error: 'Request timeout' });
   }
   if (err.message === 'Not allowed by CORS') {
+    logger.error('CORS error', { method: req.method, url: req.url, origin: req.headers.origin });
     return res.status(403).json({ error: 'CORS policy violation' });
   }
   logger.error('Server error', {
