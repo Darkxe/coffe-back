@@ -59,7 +59,7 @@ app.set('upload', upload);
 
 // Configure allowed origins for CORS
 const allowedOrigins = [
-  process.env.CLIENT_URL || 'https://coffe-front-production.up.railway.app',
+  process.env.CLIENT_URL || 'https://coffe-front.vercel.app',
   ...(process.env.NODE_ENV === 'development' ? ['http://localhost:5173', 'http://192.168.1.6:5173', /^http:\/\/192\.168\.1\.\d{1,3}:5173$/] : []),
 ];
 
@@ -91,7 +91,7 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Serve the 'uploads' directory for images, handling both /uploads and /Uploads
+// Serve the 'uploads' directory for images
 app.use(['/uploads', '/Uploads'], cors(corsOptions), express.static(path.join(__dirname, 'public/uploads')));
 
 // JWT Middleware
@@ -104,7 +104,7 @@ app.use((req, res, next) => {
       return next();
     }
     try {
-      const decoded = jwt.verify(token, process.env.JWT_SECRET || 'your_jwt_secret_key');
+      const decoded = jwt.verify(token, process.env.JWT_SECRET || 'Karim123@');
       req.user = decoded;
       logger.debug('JWT verified', { userId: decoded.id, email: decoded.email });
     } catch (error) {
@@ -247,7 +247,8 @@ app.use((req, res) => {
 });
 
 io.on('connection', (socket) => {
-  logger.info('New socket connection', { id: socket.id, handshake: socket.handshake });
+  logger.info('New socket connection', { id: socket.id });
+
   socket.on('join-session', async (data) => {
     const { token, sessionId } = data;
     if (!token && !sessionId) {
@@ -262,7 +263,7 @@ io.on('connection', (socket) => {
         return;
       }
       try {
-        const decoded = jwt.verify(token, process.env.JWT_SECRET || 'your_jwt_secret_key');
+        const decoded = jwt.verify(token, process.env.JWT_SECRET || 'Karim123@');
         const [rows] = await db.query('SELECT role FROM users WHERE id = ?', [decoded.id]);
         if (rows.length > 0 && ['admin', 'server'].includes(rows[0].role)) {
           socket.join('staff-notifications');
