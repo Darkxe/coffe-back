@@ -57,29 +57,10 @@ const upload = multer({
 
 app.set('upload', upload);
 
-// Configure allowed origins for CORS
-const allowedOrigins = [
-  process.env.CLIENT_URL || 'https://coffe-front-production.up.railway.app',
-  'https://coffe-front-git-main-karims-projects-9c4bc5fb.vercel.app',
-  'https://coffe-front.vercel.app',
-  'https://coffe-front-d0shxo4i6-karims-projects-9c4bc5fb.vercel.app', // Added new URL
-  ...(process.env.NODE_ENV === 'development' ? [
-    'http://localhost:5173',
-    'http://192.168.1.6:5173',
-    /^http:\/\/192\.168\.1\.\d{1,3}:5173$/
-  ] : []),
-];
-
+// Configure allowed origins for CORS (ignored for now per your request)
 const corsOptions = {
-  origin: (origin, callback) => {
-    if (!origin || allowedOrigins.some(allowed => typeof allowed === 'string' ? allowed === origin : allowed.test(origin))) {
-      callback(null, true);
-    } else {
-      logger.warn('CORS blocked', { origin });
-      callback(new Error('Not allowed by CORS'));
-    }
-  },
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'], // Ensure OPTIONS is included
+  origin: true, // Temporarily allow all origins to isolate WebSocket issue
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Session-Id'],
   credentials: true,
 };
@@ -252,7 +233,11 @@ app.use((req, res) => {
 });
 
 io.on('connection', (socket) => {
-  logger.info('New socket connection', { id: socket.id, namespace: socket.nsp.name });
+  logger.info('New socket connection', {
+    id: socket.id,
+    namespace: socket.nsp.name,
+    handshake: socket.handshake,
+  });
 
   socket.on('join-session', async (data) => {
     const { token, sessionId } = data;
