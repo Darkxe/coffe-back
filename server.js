@@ -69,7 +69,7 @@ app.set('upload', upload);
 
 // Configure allowed origins for CORS
 const allowedOrigins = [
-  CLIENT_URL,
+  CLIENT_URL.replace(/\/$/, ''), // Remove trailing slash
   ...(process.env.NODE_ENV === 'development' ? [
     'http://localhost:5173',
     'http://192.168.1.6:5173',
@@ -79,12 +79,15 @@ const allowedOrigins = [
 
 const corsOptions = {
   origin: (origin, callback) => {
-    logger.debug('CORS check', { origin, allowedOrigins });
-    if (!origin || allowedOrigins.some(allowed => typeof allowed === 'string' ? allowed === origin : allowed.test(origin))) {
-      logger.debug('CORS allowed', { origin });
+    const normalizedOrigin = origin ? origin.replace(/\/$/, '') : origin;
+    logger.debug('CORS check', { origin: normalizedOrigin, allowedOrigins });
+    if (!normalizedOrigin || allowedOrigins.some(allowed => 
+      typeof allowed === 'string' ? allowed === normalizedOrigin : allowed.test(normalizedOrigin)
+    )) {
+      logger.debug('CORS allowed', { origin: normalizedOrigin });
       callback(null, true);
     } else {
-      logger.warn('CORS blocked', { origin });
+      logger.warn('CORS blocked', { origin: normalizedOrigin });
       callback(new Error('Not allowed by CORS'));
     }
   },
@@ -99,11 +102,15 @@ app.use(cors(corsOptions));
 const io = new Server(server, {
   cors: {
     origin: (origin, callback) => {
-      logger.debug('Socket.IO CORS check', { origin, allowedOrigins });
-      if (!origin || allowedOrigins.some(allowed => typeof allowed === 'string' ? allowed === origin : allowed.test(origin))) {
+      const normalizedOrigin = origin ? origin.replace(/\/$/, '') : origin;
+      logger.debug('Socket.IO CORS check', { origin: normalizedOrigin, allowedOrigins });
+      if (!normalizedOrigin || allowedOrigins.some(allowed => 
+        typeof allowed === 'string' ? allowed === normalizedOrigin : allowed.test(normalizedOrigin)
+      )) {
+        logger.debug('Socket.IO CORS allowed', { origin: normalizedOrigin });
         callback(null, true);
       } else {
-        logger.warn('Socket.IO CORS blocked', { origin });
+        logger.warn('Socket.IO CORS blocked', { origin: normalizedOrigin });
         callback(new Error('Not allowed by CORS'));
       }
     },
@@ -121,7 +128,7 @@ app.use(express.static(path.join(__dirname, 'public')));
 // Serve the 'uploads' directory for images
 app.use(['/uploads', '/Uploads'], express.static(path.join(__dirname, 'public/uploads')));
 
-// JWT Middleware (only for protected routes)
+// JWT Middleware
 app.use((req, res, next) => {
   const authHeader = req.headers.authorization;
   if (authHeader && authHeader.startsWith('Bearer ')) {
