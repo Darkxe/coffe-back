@@ -91,7 +91,7 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Serve the 'uploads' directory for images
+// Serve the 'uploads' directory for images, handling both /uploads and /Uploads
 app.use(['/uploads', '/Uploads'], cors(corsOptions), express.static(path.join(__dirname, 'public/uploads')));
 
 // JWT Middleware
@@ -104,7 +104,7 @@ app.use((req, res, next) => {
       return next();
     }
     try {
-      const decoded = jwt.verify(token, process.env.JWT_SECRET || 'Karim123@');
+      const decoded = jwt.verify(token, process.env.JWT_SECRET || 'your_jwt_secret_key');
       req.user = decoded;
       logger.debug('JWT verified', { userId: decoded.id, email: decoded.email });
     } catch (error) {
@@ -263,7 +263,7 @@ io.on('connection', (socket) => {
         return;
       }
       try {
-        const decoded = jwt.verify(token, process.env.JWT_SECRET || 'Karim123@');
+        const decoded = jwt.verify(token, process.env.JWT_SECRET || 'your_jwt_secret_key');
         const [rows] = await db.query('SELECT role FROM users WHERE id = ?', [decoded.id]);
         if (rows.length > 0 && ['admin', 'server'].includes(rows[0].role)) {
           socket.join('staff-notifications');
