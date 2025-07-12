@@ -59,9 +59,9 @@ app.set('upload', upload);
 
 // Configure allowed origins for CORS
 const allowedOrigins = [
-  process.env.CLIENT_URL || 'https://coffe-front-production.up.railway.app', // Dynamic frontend URL
-  'https://coffe-front-git-main-karims-projects-9c4bc5fb.vercel.app', // Current Vercel frontend
-  'https://coffe-front.vercel.app', // Legacy Vercel frontend
+  process.env.CLIENT_URL || 'https://coffe-front-production.up.railway.app',
+  'https://coffe-front-git-main-karims-projects-9c4bc5fb.vercel.app',
+  'https://coffe-front.vercel.app',
   ...(process.env.NODE_ENV === 'development' ? [
     'http://localhost:5173',
     'http://192.168.1.6:5173',
@@ -86,10 +86,7 @@ const corsOptions = {
 app.use(cors(corsOptions));
 
 const io = new Server(server, {
-  cors: {
-    ...corsOptions,
-    credentials: true,
-  },
+  cors: { ...corsOptions, credentials: true },
   path: '/socket.io/',
 });
 
@@ -98,8 +95,8 @@ app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, 'public')));
 
 // Serve the 'uploads' directory for images with /api prefix
-app.use('/api/uploads', express.static(path.join(__dirname, 'public/uploads'))); // Serve /api/uploads
-app.use('/api/Uploads', express.static(path.join(__dirname, 'public/uploads'))); // Handle case sensitivity
+app.use('/api/uploads', express.static(path.join(__dirname, 'public/uploads')));
+app.use('/api/Uploads', express.static(path.join(__dirname, 'public/uploads')));
 
 // JWT Middleware
 app.use((req, res, next) => {
@@ -254,7 +251,7 @@ app.use((req, res) => {
 });
 
 io.on('connection', (socket) => {
-  logger.info('New socket connection', { id: socket.id });
+  logger.info('New socket connection', { id: socket.id, namespace: socket.nsp.name });
 
   socket.on('join-session', async (data) => {
     const { token, sessionId } = data;
