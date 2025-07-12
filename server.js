@@ -57,9 +57,21 @@ const upload = multer({
 
 app.set('upload', upload);
 
-// Configure allowed origins for CORS (ignored for now per your request)
+// Configure allowed origins for CORS
+const allowedOrigins = [
+  process.env.CLIENT_URL || 'https://coffe-front-production.up.railway.app',
+  ...(process.env.NODE_ENV === 'development' ? ['http://localhost:5173', 'http://192.168.1.6:5173', /^http:\/\/192\.168\.1\.\d{1,3}:5173$/] : []),
+];
+
 const corsOptions = {
-  origin: true, // Temporarily allow all origins to isolate WebSocket issue
+  origin: (origin, callback) => {
+    if (!origin || allowedOrigins.some(allowed => typeof allowed === 'string' ? allowed === origin : allowed.test(origin))) {
+      callback(null, true);
+    } else {
+      logger.warn('CORS blocked', { origin });
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Session-Id'],
   credentials: true,
@@ -68,7 +80,10 @@ const corsOptions = {
 app.use(cors(corsOptions));
 
 const io = new Server(server, {
-  cors: { ...corsOptions, credentials: true },
+  cors: {
+    ...corsOptions,
+    credentials: true,
+  },
   path: '/socket.io/',
 });
 
@@ -76,9 +91,8 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Serve the 'uploads' directory for images with /api prefix
-app.use('/api/uploads', express.static(path.join(__dirname, 'public/uploads')));
-app.use('/api/Uploads', express.static(path.join(__dirname, 'public/uploads')));
+// Serve the 'uploads' directory for images, handling both /uploads and /Uploads
+app.use(['/uploads', '/Uploads'], cors(corsOptions), express.static(path.join(__dirname, 'public/uploads')));
 
 // JWT Middleware
 app.use((req, res, next) => {
@@ -233,12 +247,7 @@ app.use((req, res) => {
 });
 
 io.on('connection', (socket) => {
-  logger.info('New socket connection', {
-    id: socket.id,
-    namespace: socket.nsp.name,
-    handshake: socket.handshake,
-  });
-
+  logger.info('New socket connection', { id: socket.id, handshake: socket.handshake });
   socket.on('join-session', async (data) => {
     const { token, sessionId } = data;
     if (!token && !sessionId) {
