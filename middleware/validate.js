@@ -118,46 +118,6 @@ const validate = (req, res, next) => {
           .isString()
           .trim()
           .withMessage('Supplement name must be a string'),
-        body('breakfastItems').optional().isArray().withMessage('Breakfast items must be an array'),
-        body('breakfastItems.*.breakfast_id')
-          .optional()
-          .isInt({ min: 1 })
-          .withMessage('Valid breakfast ID is required'),
-        body('breakfastItems.*.quantity')
-          .optional()
-          .isInt({ min: 1 })
-          .withMessage('Quantity must be at least 1'),
-        body('breakfastItems.*.unit_price')
-          .optional()
-          .isFloat({ min: 0.01 })
-          .withMessage('Unit price must be a positive number'),
-        body('breakfastItems.*.option_ids')
-          .optional()
-          .isArray()
-          .withMessage('Option IDs must be an array'),
-        body('breakfastItems.*.option_ids.*')
-          .optional()
-          .isInt({ min: 1 })
-          .withMessage('Valid option ID is required'),
-        body('breakfastItems.*.option_ids')
-          .optional()
-          .custom(async (optionIds, { req }) => {
-            if (!optionIds || !Array.isArray(optionIds) || optionIds.length === 0) return true;
-            const breakfastId = req.body.breakfastItems.find(item => item.option_ids === optionIds)?.breakfast_id;
-            if (!breakfastId) throw new Error('Breakfast ID not found for option IDs');
-            const [groups] = await db.query('SELECT id FROM breakfast_option_groups WHERE breakfast_id = ?', [breakfastId]);
-            if (groups.length === 0) return true;
-            const [options] = await db.query(
-              'SELECT group_id FROM breakfast_options WHERE id IN (?) AND breakfast_id = ?',
-              [optionIds, breakfastId]
-            );
-            const selectedGroups = new Set(options.map(opt => opt.group_id));
-            if (selectedGroups.size !== groups.length) {
-              throw new Error(`Must select exactly one option from each of the ${groups.length} option groups for breakfast ${breakfastId}`);
-            }
-            return true;
-          })
-          .withMessage('Must select exactly one option from each option group'),
         body('total_price')
           .isFloat({ min: 0.01 })
           .withMessage('Total price must be a positive number'),
@@ -205,6 +165,7 @@ const validate = (req, res, next) => {
       validations.push(
         param('id')
             .isString()
+            .commit()
             .trim()
             .customSanitizer(value => parseInt(value))
             .isInt({ min: 1 })
@@ -530,197 +491,6 @@ const validate = (req, res, next) => {
             .withMessage('Valid supplement ID is required')
         );
       }
-    } else if (req.path.includes('/breakfasts') && req.path.includes('/option-groups')) {
-      validations.push(
-        body('user_id')
-          .optional()
-          .isString()
-          .trim()
-          .customSanitizer(value => value ? parseInt(value) : undefined)
-          .isInt({ min: 1 })
-          .custom((value, { req }) => {
-            if (value && (!req.user || req.user.id !== value)) {
-              throw new Error('User ID does not match authenticated user');
-            }
-            return true;
-          })
-          .withMessage('Valid user ID matching authenticated user is required'),
-        body('title')
-          .isString()
-          .notEmpty()
-          .trim()
-          .withMessage('Title is required'),
-        param('id')
-          .isString()
-          .trim()
-          .customSanitizer(value => parseInt(value))
-          .isInt({ min: 1 })
-          .withMessage('Valid breakfast ID is required')
-      );
-      if (req.method === 'PUT' && req.path.match(/^\/breakfasts\/\d+\/option-groups\/\d+$/)) {
-        validations.push(
-          param('breakfastId')
-            .isString()
-            .trim()
-            .customSanitizer(value => parseInt(value))
-            .isInt({ min: 1 })
-            .withMessage('Valid breakfast ID is required'),
-          param('groupId')
-            .isString()
-            .trim()
-            .customSanitizer(value => parseInt(value))
-            .isInt({ min: 1 })
-            .withMessage('Valid group ID is required')
-        );
-      }
-      if (req.method === 'DELETE') {
-        validations.push(
-          param('breakfastId')
-            .isString()
-            .trim()
-            .customSanitizer(value => parseInt(value))
-            .isInt({ min: 1 })
-            .withMessage('Valid breakfast ID is required'),
-          param('groupId')
-            .isString()
-            .trim()
-            .customSanitizer(value => parseInt(value))
-            .isInt({ min: 1 })
-            .withMessage('Valid group ID is required')
-        );
-      }
-    } else if (req.path.includes('/breakfasts') && req.path.includes('/options')) {
-      validations.push(
-        body('user_id')
-          .optional()
-          .isString()
-          .trim()
-          .customSanitizer(value => value ? parseInt(value) : undefined)
-          .isInt({ min: 1 })
-          .custom((value, { req }) => {
-            if (value && (!req.user || req.user.id !== value)) {
-              throw new Error('User ID does not match authenticated user');
-            }
-            return true;
-          })
-          .withMessage('Valid user ID matching authenticated user is required'),
-        body('group_id')
-          .isString()
-          .trim()
-          .customSanitizer(value => parseInt(value))
-          .isInt({ min: 1 })
-          .withMessage('Valid group ID is required'),
-        body('option_type')
-          .isString()
-          .notEmpty()
-          .trim()
-          .withMessage('Option type is required'),
-        body('option_name')
-          .isString()
-          .notEmpty()
-          .trim()
-          .withMessage('Option name is required'),
-        body('additional_price')
-          .isString()
-          .trim()
-          .customSanitizer(value => value ? parseFloat(value) : 0)
-          .isFloat({ min: 0 })
-          .withMessage('Additional price must be a non-negative number'),
-        param('id')
-          .isString()
-          .trim()
-          .customSanitizer(value => parseInt(value))
-          .isInt({ min: 1 })
-          .withMessage('Valid breakfast ID is required')
-      );
-      if (req.method === 'PUT' && req.path.match(/^\/breakfasts\/\d+\/options\/\d+$/)) {
-        validations.push(
-          param('breakfastId')
-            .isString()
-            .trim()
-            .customSanitizer(value => parseInt(value))
-            .isInt({ min: 1 })
-            .withMessage('Valid breakfast ID is required'),
-          param('optionId')
-            .isString()
-            .trim()
-            .customSanitizer(value => parseInt(value))
-            .isInt({ min: 1 })
-            .withMessage('Valid option ID is required')
-        );
-      }
-      if (req.method === 'DELETE') {
-        validations.push(
-          param('breakfastId')
-            .isString()
-            .trim()
-            .customSanitizer(value => parseInt(value))
-            .isInt({ min: 1 })
-            .withMessage('Valid breakfast ID is required'),
-          param('optionId')
-            .isString()
-            .trim()
-            .customSanitizer(value => parseInt(value))
-            .isInt({ min: 1 })
-            .withMessage('Valid option ID is required')
-        );
-      }
-    } else if (req.path.includes('/breakfasts') && !req.path.includes('/options') && !req.path.includes('/option-groups')) {
-      validations.push(
-        body('user_id')
-          .optional()
-          .isString()
-          .trim()
-          .customSanitizer(value => value ? parseInt(value) : undefined)
-          .isInt({ min: 1 })
-          .custom((value, { req }) => {
-            if (value && (!req.user || req.user.id !== value)) {
-              throw new Error('User ID does not match authenticated user');
-            }
-            return true;
-          })
-          .withMessage('Valid user ID matching authenticated user is required'),
-        body('name')
-          .isString()
-          .notEmpty()
-          .trim()
-          .withMessage('Name is required'),
-        body('price')
-          .isString()
-          .trim()
-          .customSanitizer(value => value ? parseFloat(value) : undefined)
-          .isFloat({ min: 0.01 })
-          .withMessage('Price must be a positive number'),
-        body('description')
-          .optional()
-          .isString()
-          .trim()
-          .withMessage('Description must be a string'),
-        body('availability')
-          .optional()
-          .isString()
-          .trim()
-          .customSanitizer(value => value === 'true' || value === true)
-          .isBoolean()
-          .withMessage('Availability must be a boolean'),
-        body('category_id')
-          .optional()
-          .isString()
-          .trim()
-          .customSanitizer(value => value ? parseInt(value) : undefined)
-          .isInt({ min: 1 })
-          .withMessage('Invalid category ID')
-      );
-      if (req.method === 'PUT') {
-        validations.push(
-          param('id')
-            .isString()
-            .trim()
-            .customSanitizer(value => parseInt(value))
-            .isInt({ min: 1 })
-            .withMessage('Valid breakfast ID is required')
-        );
-      }
     } else if (req.path.includes('/notifications')) {
       validations.push(
         body('user_id')
@@ -834,36 +604,6 @@ const validate = (req, res, next) => {
           .withMessage('Valid category ID is required')
       );
     }
-    if (req.path.match(/^\/breakfasts\/\d+$/)) {
-      validations.push(
-        param('id')
-          .isString()
-          .trim()
-          .customSanitizer(value => parseInt(value))
-          .isInt({ min: 1 })
-          .withMessage('Valid breakfast ID is required')
-      );
-    }
-    if (req.path.match(/^\/breakfasts\/\d+\/options$/)) {
-      validations.push(
-        param('id')
-          .isString()
-          .trim()
-          .customSanitizer(value => parseInt(value))
-          .isInt({ min: 1 })
-          .withMessage('Valid breakfast ID is required')
-      );
-    }
-    if (req.path.match(/^\/breakfasts\/\d+\/option-groups$/)) {
-      validations.push(
-        param('id')
-          .isString()
-          .trim()
-          .customSanitizer(value => parseInt(value))
-          .isInt({ min: 1 })
-          .withMessage('Valid breakfast ID is required')
-      );
-    }
   }
 
   if (req.method === 'DELETE') {
@@ -938,8 +678,7 @@ const validate = (req, res, next) => {
         param('id')
           .isString()
           .trim()
-          .customSani
-        (value => parseInt(value))
+          .customSanitizer(value => parseInt(value))
           .isInt({ min: 1 })
           .withMessage('Invalid user ID'),
         body('user_id')
@@ -1000,30 +739,8 @@ const validate = (req, res, next) => {
           })
           .withMessage('Valid user ID matching authenticated user is required')
       );
-    } else if (req.path.match(/^\/breakfasts\/\d+$/)) {
-      validations.push(
-        param('id')
-          .isString()
-          .trim()
-          .customSanitizer(value => parseInt(value))
-          .isInt({ min: 1 })
-          .withMessage('Valid breakfast ID is required'),
-        body('user_id')
-          .optional()
-          .isString()
-          .trim()
-          .customSanitizer(value => parseInt(value))
-          .isInt({ min: 1 })
-          .custom((value, { req }) => {
-            if (value && (!req.user || req.user.id !== value)) {
-              throw new Error('User ID does not match authenticated user');
-            }
-            return true;
-          })
-          .withMessage('Valid user ID matching authenticated user is required')
-      );
     }
-}
+  }
 
   Promise.all(validations.map(validation => validation.run(req))).then(() => {
     const errors = validationResult(req);
