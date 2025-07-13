@@ -6,6 +6,7 @@ const jwt = require('jsonwebtoken');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs').promises;
+const breakfastValidation = require('../middleware/breakfastValidation');
 
 // Ensure upload directory exists
 const uploadDir = '/app/public/uploads';
@@ -44,21 +45,24 @@ const checkAdmin = async (userId) => {
 // Middleware to log raw FormData
 const logFormData = (req, res, next) => {
   if (req.headers['content-type']?.includes('multipart/form-data')) {
+    const formData = req.body ? { ...req.body } : {};
     logger.info('Raw FormData request', {
       headers: req.headers,
       method: req.method,
       url: req.url,
+      formData,
+      file: req.file ? { name: req.file.filename, path: req.file.path } : null,
     });
   }
   next();
 };
 
 // Create breakfast
-router.post('/breakfasts', logFormData, upload, async (req, res) => {
+router.post('/breakfasts', breakfastValidation, upload, logFormData, async (req, res) => {
   const { user_id, name, description, price, availability, category_id } = req.body;
   const image = req.file;
   logger.info('Parsed breakfast creation request', {
-    body: req.body,
+    body: { user_id, name, description, price, availability, category_id },
     file: image ? { name: image.filename, path: image.path } : null,
   });
   try {
@@ -66,42 +70,31 @@ router.post('/breakfasts', logFormData, upload, async (req, res) => {
       logger.warn('Unauthorized attempt to add breakfast', { user_id, authenticatedUser: req.user });
       return res.status(403).json({ error: 'Admin access required' });
     }
-    const parsedPrice = parseFloat(price);
+    const finalName = name && name.trim() ? name.trim() : 'Unnamed Breakfast';
+    const finalPrice = price && !isNaN(parseFloat(price)) && parseFloat(price) >= 0.01 ? parseFloat(price) : 0.01;
     const parsedAvailability = availability === 'true' || availability === true;
     const parsedCategoryId = category_id ? parseInt(category_id) : null;
-    if (!name || !name.trim()) {
-      logger.warn('Missing name', { user_id });
-      return res.status(400).json({ error: 'Name is required' });
-    }
-    if (isNaN(parsedPrice) || parsedPrice <= 0) {
-      logger.warn('Invalid price', { price });
-      return res.status(400).json({ error: 'Price must be a positive number' });
-    }
-    if (parsedCategoryId && (isNaN(parsedCategoryId) || parsedCategoryId <= 0)) {
-      logger.warn('Invalid category ID', { category_id });
-      return res.status(400).json({ error: 'Valid category ID is required' });
-    }
     const image_url = image ? `/Uploads/${image.filename}` : null;
     const [result] = await db.query(
       'INSERT INTO breakfasts (name, description, price, image_url, availability, category_id) VALUES (?, ?, ?, ?, ?, ?)',
-      [name.trim(), description || null, parsedPrice, image_url, parsedAvailability, parsedCategoryId]
+      [finalName, description || null, finalPrice, image_url, parsedAvailability, parsedCategoryId]
     );
-    logger.info('Breakfast created', { id: result.insertId, name, image_url, category_id: parsedCategoryId });
+    logger.info('Breakfast created', { id: result.insertId, name: finalName, image_url, category_id: parsedCategoryId });
     res.status(201).json({ message: 'Breakfast created', id: result.insertId });
   } catch (error) {
     logger.error('Error creating breakfast', { error: error.message, body: req.body });
-    res.status(500).json({ error: 'Failed to create breakfast' });
+    res.status(500).json({ error: 'Failed to create breakfast', details: error.message });
   }
 });
 
 // Update breakfast
-router.put('/breakfasts/:id', logFormData, upload, async (req, res) => {
+router.put('/breakfasts/:id', breakfastValidation, upload, logFormData, async (req, res) => {
   const { user_id, name, description, price, availability, category_id } = req.body;
   const image = req.file;
   const { id } = req.params;
   logger.info('Parsed breakfast update request', {
     params: { id },
-    body: req.body,
+    body: { user_id, name, description, price, availability, category_id },
     file: image ? { name: image.filename, path: image.path } : null,
   });
   try {
@@ -110,25 +103,14 @@ router.put('/breakfasts/:id', logFormData, upload, async (req, res) => {
       return res.status(403).json({ error: 'Admin access required' });
     }
     const breakfastId = parseInt(id);
-    const parsedPrice = parseFloat(price);
-    const parsedAvailability = availability === 'true' || availability === true;
-    const parsedCategoryId = category_id ? parseInt(category_id) : null;
     if (isNaN(breakfastId) || breakfastId <= 0) {
       logger.warn('Invalid breakfast ID', { id });
       return res.status(400).json({ error: 'Valid breakfast ID is required' });
     }
-    if (!name || !name.trim()) {
-      logger.warn('Missing name', { user_id });
-      return res.status(400).json({ error: 'Name is required' });
-    }
-    if (isNaN(parsedPrice) || parsedPrice <= 0) {
-      logger.warn('Invalid price', { price });
-      return res.status(400).json({ error: 'Price must be a positive number' });
-    }
-    if (parsedCategoryId && (isNaN(parsedCategoryId) || parsedCategoryId <= 0)) {
-      logger.warn('Invalid category ID', { category_id });
-      return res.status(400).json({ error: 'Valid category ID is required' });
-    }
+    const finalName = name && name.trim() ? name.trim() : 'Unnamed Breakfast';
+    const finalPrice = price && !isNaN(parseFloat(price)) && parseFloat(price) >= 0.01 ? parseFloat(price) : 0.01;
+    const parsedAvailability = availability === 'true' || availability === true;
+    const parsedCategoryId = category_id ? parseInt(category_id) : null;
     // Check for existing breakfast and its image
     const [existing] = await db.query('SELECT image_url FROM breakfasts WHERE id = ?', [breakfastId]);
     if (existing.length === 0) {
@@ -148,7 +130,7 @@ router.put('/breakfasts/:id', logFormData, upload, async (req, res) => {
       }
     }
     // Update breakfast
-    const updateFields = [name.trim(), description || null, parsedPrice, parsedAvailability, parsedCategoryId];
+    const updateFields = [finalName, description || null, finalPrice, parsedAvailability, parsedCategoryId];
     let query = 'UPDATE breakfasts SET name = ?, description = ?, price = ?, availability = ?, category_id = ?';
     if (image_url) {
       query += ', image_url = ?';
@@ -160,16 +142,16 @@ router.put('/breakfasts/:id', logFormData, upload, async (req, res) => {
       logger.warn('Breakfast not found for update', { id: breakfastId });
       return res.status(404).json({ error: 'Breakfast not found' });
     }
-    logger.info('Breakfast updated', { id: breakfastId, name, image_url, category_id: parsedCategoryId });
+    logger.info('Breakfast updated', { id: breakfastId, name: finalName, image_url, category_id: parsedCategoryId });
     res.json({ message: 'Breakfast updated' });
   } catch (error) {
     logger.error('Error updating breakfast', { error: error.message, body: req.body });
-    res.status(500).json({ error: 'Failed to update breakfast' });
+    res.status(500).json({ error: 'Failed to update breakfast', details: error.message });
   }
 });
 
 // Delete breakfast
-router.delete('/breakfasts/:id', async (req, res) => {
+router.delete('/breakfasts/:id', breakfastValidation, async (req, res) => {
   const { user_id } = req.body;
   const { id } = req.params;
   try {
@@ -203,42 +185,133 @@ router.delete('/breakfasts/:id', async (req, res) => {
     res.json({ message: 'Breakfast deleted' });
   } catch (error) {
     logger.error('Error deleting breakfast', { error: error.message, id });
-    res.status(500).json({ error: 'Failed to delete breakfast' });
+    res.status(500).json({ error: 'Failed to delete breakfast', details: error.message });
   }
 });
 
 // Fetch all breakfasts
 router.get('/breakfasts', async (req, res) => {
   try {
-    const [rows] = await db.query('SELECT id, name, description, price, image_url, availability, category_id FROM breakfasts');
-    res.json(rows);
+    const [rows] = await db.query(
+      `SELECT b.*, c.name AS category_name,
+              COALESCE(AVG(r.rating), 0) AS average_rating,
+              COUNT(r.id) AS review_count
+       FROM breakfasts b
+       LEFT JOIN categories c ON b.category_id = c.id
+       LEFT JOIN breakfast_ratings r ON b.id = r.breakfast_id
+       GROUP BY b.id`
+    );
+    const sanitizedRows = rows.map(item => ({
+      ...item,
+      average_rating: parseFloat(item.average_rating).toFixed(1),
+      review_count: parseInt(item.review_count),
+    }));
+    res.json(sanitizedRows);
   } catch (error) {
     logger.error('Error fetching breakfasts', { error: error.message });
-    res.status(500).json({ error: 'Failed to fetch breakfasts' });
+    res.status(500).json({ error: 'Failed to fetch breakfasts', details: error.message });
   }
 });
 
 // Fetch single breakfast
-router.get('/breakfasts/:id', async (req, res) => {
+router.get('/breakfasts/:id', breakfastValidation, async (req, res) => {
   try {
+    const breakfastId = parseInt(req.params.id);
+    if (isNaN(breakfastId) || breakfastId <= 0) {
+      logger.warn('Invalid breakfast ID', { id: req.params.id });
+      return res.status(400).json({ error: 'Valid breakfast ID is required' });
+    }
     const [rows] = await db.query(
-      'SELECT id, name, description, price, image_url, availability, category_id FROM breakfasts WHERE id = ?',
-      [req.params.id]
+      `SELECT b.*, c.name AS category_name,
+              COALESCE(AVG(r.rating), 0) AS average_rating,
+              COUNT(r.id) AS review_count
+       FROM breakfasts b
+       LEFT JOIN categories c ON b.category_id = c.id
+       LEFT JOIN breakfast_ratings r ON b.id = r.breakfast_id
+       WHERE b.id = ?
+       GROUP BY b.id`,
+      [breakfastId]
     );
     if (rows.length === 0) {
-      logger.warn('Breakfast not found', { id: req.params.id });
+      logger.warn('Breakfast not found', { id: breakfastId });
       return res.status(404).json({ error: 'Breakfast not found' });
     }
-    res.json(rows[0]);
+    const breakfast = rows[0];
+    breakfast.average_rating = parseFloat(breakfast.average_rating).toFixed(1);
+    breakfast.review_count = parseInt(breakfast.review_count);
+    res.json(breakfast);
   } catch (error) {
     logger.error('Error fetching breakfast', { error: error.message, id: req.params.id });
-    res.status(500).json({ error: 'Failed to fetch breakfast' });
+    res.status(500).json({ error: 'Failed to fetch breakfast', details: error.message });
+  }
+});
+
+// Fetch related breakfasts and menu items
+router.get('/breakfasts/:id/related', async (req, res) => {
+  try {
+    const breakfastId = parseInt(req.params.id);
+    if (isNaN(breakfastId) || breakfastId <= 0) {
+      logger.warn('Invalid breakfast ID', { id: req.params.id });
+      return res.status(400).json({ error: 'Valid breakfast ID is required' });
+    }
+    const [breakfast] = await db.query(
+      'SELECT category_id FROM breakfasts WHERE id = ?',
+      [breakfastId]
+    );
+    if (!breakfast.length) {
+      logger.warn('Breakfast not found', { id: breakfastId });
+      return res.status(404).json({ error: 'Breakfast not found' });
+    }
+    const [breakfastRows] = await db.query(
+      `SELECT b.*, c.name AS category_name,
+              COALESCE(AVG(r.rating), 0) AS average_rating,
+              COUNT(r.id) AS review_count
+       FROM breakfasts b
+       LEFT JOIN categories c ON b.category_id = c.id
+       LEFT JOIN breakfast_ratings r ON b.id = r.breakfast_id
+       WHERE b.category_id = ? AND b.id != ?
+       GROUP BY b.id
+       LIMIT 2`,
+      [breakfast[0].category_id, breakfastId]
+    );
+    const [menuItemRows] = await db.query(
+      `SELECT mi.*, c.name AS category_name,
+              COALESCE(AVG(r.rating), 0) AS average_rating,
+              COUNT(r.id) AS review_count
+       FROM menu_items mi
+       LEFT JOIN categories c ON mi.category_id = c.id
+       LEFT JOIN ratings r ON mi.id = r.item_id
+       WHERE mi.category_id = ?
+       GROUP BY mi.id
+       LIMIT 2`,
+      [breakfast[0].category_id]
+    );
+    const sanitizedBreakfasts = breakfastRows.map(item => ({
+      ...item,
+      type: 'breakfast',
+      average_rating: parseFloat(item.average_rating).toFixed(1),
+      review_count: parseInt(item.review_count),
+    }));
+    const sanitizedMenuItems = menuItemRows.map(item => ({
+      ...item,
+      type: 'menuItem',
+      dietary_tags: item.dietary_tags && typeof item.dietary_tags === 'string' && item.dietary_tags.match(/^\[.*\]$/)
+        ? item.dietary_tags
+        : '[]',
+      average_rating: parseFloat(item.average_rating).toFixed(1),
+      review_count: parseInt(item.review_count),
+    }));
+    const combinedItems = [...sanitizedBreakfasts, ...sanitizedMenuItems].slice(0, 4);
+    res.json(combinedItems);
+  } catch (error) {
+    logger.error('Error fetching related products', { error: error.message });
+    res.status(500).json({ error: 'Failed to fetch related products', details: error.message });
   }
 });
 
 // Create option group
-router.post('/breakfasts/:id/option-groups', async (req, res) => {
-  const { user_id, title } = req.body;
+router.post('/breakfasts/:id/option-groups', breakfastValidation, async (req, res) => {
+  const { user_id, title, is_required, max_selections } = req.body;
   try {
     if (!req.user || req.user.id !== parseInt(user_id) || !await checkAdmin(user_id)) {
       logger.warn('Unauthorized attempt to add option group', { user_id, authenticatedUser: req.user });
@@ -253,6 +326,8 @@ router.post('/breakfasts/:id/option-groups', async (req, res) => {
       logger.warn('Missing title', { user_id });
       return res.status(400).json({ error: 'Title is required' });
     }
+    const parsedIsRequired = is_required === 'true' || is_required === true;
+    const parsedMaxSelections = parseInt(max_selections) || 1;
     const [breakfast] = await db.query('SELECT id FROM breakfasts WHERE id = ?', [breakfastId]);
     if (breakfast.length === 0) {
       logger.warn('Breakfast not found', { id: breakfastId });
@@ -264,20 +339,20 @@ router.post('/breakfasts/:id/option-groups', async (req, res) => {
       return res.status(400).json({ error: 'Option group title already exists for this breakfast' });
     }
     const [result] = await db.query(
-      'INSERT INTO breakfast_option_groups (breakfast_id, title) VALUES (?, ?)',
-      [breakfastId, title.trim()]
+      'INSERT INTO breakfast_option_groups (breakfast_id, title, is_required, max_selections) VALUES (?, ?, ?, ?)',
+      [breakfastId, title.trim(), parsedIsRequired, parsedMaxSelections]
     );
-    logger.info('Option group created', { id: result.insertId, breakfast_id: breakfastId, title });
+    logger.info('Option group created', { id: result.insertId, breakfast_id: breakfastId, title, is_required: parsedIsRequired, max_selections: parsedMaxSelections });
     res.status(201).json({ message: 'Option group created', id: result.insertId });
   } catch (error) {
     logger.error('Error creating option group', { error: error.message, breakfast_id: req.params.id });
-    res.status(500).json({ error: 'Failed to create option group' });
+    res.status(500).json({ error: 'Failed to create option group', details: error.message });
   }
 });
 
 // Update option group
-router.put('/breakfasts/:breakfastId/option-groups/:groupId', async (req, res) => {
-  const { user_id, title } = req.body;
+router.put('/breakfasts/:breakfastId/option-groups/:groupId', breakfastValidation, async (req, res) => {
+  const { user_id, title, is_required, max_selections } = req.body;
   try {
     if (!req.user || req.user.id !== parseInt(user_id) || !await checkAdmin(user_id)) {
       logger.warn('Unauthorized attempt to update option group', { user_id, authenticatedUser: req.user });
@@ -297,6 +372,8 @@ router.put('/breakfasts/:breakfastId/option-groups/:groupId', async (req, res) =
       logger.warn('Missing title', { user_id });
       return res.status(400).json({ error: 'Title is required' });
     }
+    const parsedIsRequired = is_required === 'true' || is_required === true;
+    const parsedMaxSelections = parseInt(max_selections) || 1;
     const [breakfast] = await db.query('SELECT id FROM breakfasts WHERE id = ?', [breakfastId]);
     if (breakfast.length === 0) {
       logger.warn('Breakfast not found', { id: breakfastId });
@@ -313,19 +390,19 @@ router.put('/breakfasts/:breakfastId/option-groups/:groupId', async (req, res) =
       return res.status(400).json({ error: 'Option group title already exists for this breakfast' });
     }
     const [result] = await db.query(
-      'UPDATE breakfast_option_groups SET title = ? WHERE id = ?',
-      [title.trim(), groupId]
+      'UPDATE breakfast_option_groups SET title = ?, is_required = ?, max_selections = ? WHERE id = ?',
+      [title.trim(), parsedIsRequired, parsedMaxSelections, groupId]
     );
-    logger.info('Option group updated', { id: groupId, breakfast_id: breakfastId, title });
+    logger.info('Option group updated', { id: groupId, breakfast_id: breakfastId, title, is_required: parsedIsRequired, max_selections: parsedMaxSelections });
     res.json({ message: 'Option group updated' });
   } catch (error) {
     logger.error('Error updating option group', { error: error.message, breakfast_id: req.params.breakfastId, group_id: req.params.groupId });
-    res.status(500).json({ error: 'Failed to update option group' });
+    res.status(500).json({ error: 'Failed to update option group', details: error.message });
   }
 });
 
 // Delete option group
-router.delete('/breakfasts/:breakfastId/option-groups/:groupId', async (req, res) => {
+router.delete('/breakfasts/:breakfastId/option-groups/:groupId', breakfastValidation, async (req, res) => {
   const { user_id } = req.body;
   try {
     if (!req.user || req.user.id !== parseInt(user_id) || !await checkAdmin(user_id)) {
@@ -359,12 +436,12 @@ router.delete('/breakfasts/:breakfastId/option-groups/:groupId', async (req, res
     res.json({ message: 'Option group deleted' });
   } catch (error) {
     logger.error('Error deleting option group', { error: error.message, breakfast_id: req.params.breakfastId, group_id: req.params.groupId });
-    res.status(500).json({ error: 'Failed to delete option group' });
+    res.status(500).json({ error: 'Failed to delete option group', details: error.message });
   }
 });
 
 // Fetch option groups
-router.get('/breakfasts/:id/option-groups', async (req, res) => {
+router.get('/breakfasts/:id/option-groups', breakfastValidation, async (req, res) => {
   try {
     const breakfastId = parseInt(req.params.id);
     if (isNaN(breakfastId) || breakfastId <= 0) {
@@ -372,18 +449,18 @@ router.get('/breakfasts/:id/option-groups', async (req, res) => {
       return res.status(400).json({ error: 'Valid breakfast ID is required' });
     }
     const [rows] = await db.query(
-      'SELECT id, title FROM breakfast_option_groups WHERE breakfast_id = ?',
+      'SELECT id, title, is_required, max_selections FROM breakfast_option_groups WHERE breakfast_id = ?',
       [breakfastId]
     );
     res.json(rows);
   } catch (error) {
     logger.error('Error fetching option groups', { error: error.message, breakfast_id: req.params.id });
-    res.status(500).json({ error: 'Failed to fetch option groups' });
+    res.status(500).json({ error: 'Failed to fetch option groups', details: error.message });
   }
 });
 
 // Create breakfast option
-router.post('/breakfasts/:id/options', async (req, res) => {
+router.post('/breakfasts/:id/options', breakfastValidation, async (req, res) => {
   const { user_id, group_id, option_type, option_name, additional_price } = req.body;
   try {
     if (!req.user || req.user.id !== parseInt(user_id) || !await checkAdmin(user_id)) {
@@ -427,12 +504,12 @@ router.post('/breakfasts/:id/options', async (req, res) => {
     res.status(201).json({ message: 'Breakfast option created', id: result.insertId });
   } catch (error) {
     logger.error('Error creating breakfast option', { error: error.message, breakfast_id: req.params.id });
-    res.status(500).json({ error: 'Failed to create breakfast option' });
+    res.status(500).json({ error: 'Failed to create breakfast option', details: error.message });
   }
 });
 
 // Update breakfast option
-router.put('/breakfasts/:breakfastId/options/:optionId', async (req, res) => {
+router.put('/breakfasts/:breakfastId/options/:optionId', breakfastValidation, async (req, res) => {
   const { user_id, group_id, option_type, option_name, additional_price } = req.body;
   try {
     if (!req.user || req.user.id !== parseInt(user_id) || !await checkAdmin(user_id)) {
@@ -486,12 +563,12 @@ router.put('/breakfasts/:breakfastId/options/:optionId', async (req, res) => {
     res.json({ message: 'Breakfast option updated' });
   } catch (error) {
     logger.error('Error updating breakfast option', { error: error.message, breakfast_id: req.params.breakfastId, option_id: req.params.optionId });
-    res.status(500).json({ error: 'Failed to update breakfast option' });
+    res.status(500).json({ error: 'Failed to update breakfast option', details: error.message });
   }
 });
 
 // Delete breakfast option
-router.delete('/breakfasts/:breakfastId/options/:optionId', async (req, res) => {
+router.delete('/breakfasts/:breakfastId/options/:optionId', breakfastValidation, async (req, res) => {
   const { user_id } = req.body;
   try {
     if (!req.user || req.user.id !== parseInt(user_id) || !await checkAdmin(user_id)) {
@@ -520,12 +597,12 @@ router.delete('/breakfasts/:breakfastId/options/:optionId', async (req, res) => 
     res.json({ message: 'Breakfast option deleted' });
   } catch (error) {
     logger.error('Error deleting breakfast option', { error: error.message, breakfast_id: req.params.breakfastId, option_id: req.params.optionId });
-    res.status(500).json({ error: 'Failed to delete breakfast option' });
+    res.status(500).json({ error: 'Failed to delete breakfast option', details: error.message });
   }
 });
 
 // Fetch breakfast options
-router.get('/breakfasts/:id/options', async (req, res) => {
+router.get('/breakfasts/:id/options', breakfastValidation, async (req, res) => {
   try {
     const breakfastId = parseInt(req.params.id);
     if (isNaN(breakfastId) || breakfastId <= 0) {
@@ -533,7 +610,7 @@ router.get('/breakfasts/:id/options', async (req, res) => {
       return res.status(400).json({ error: 'Valid breakfast ID is required' });
     }
     const [rows] = await db.query(
-      'SELECT bo.id, bo.group_id, bo.option_type, bo.option_name, bo.additional_price, bog.title as group_title ' +
+      'SELECT bo.id, bo.group_id, bo.option_type, bo.option_name, bo.additional_price, bog.title as group_title, bog.is_required, bog.max_selections ' +
       'FROM breakfast_options bo ' +
       'JOIN breakfast_option_groups bog ON bo.group_id = bog.id ' +
       'WHERE bo.breakfast_id = ?',
@@ -542,7 +619,80 @@ router.get('/breakfasts/:id/options', async (req, res) => {
     res.json(rows);
   } catch (error) {
     logger.error('Error fetching breakfast options', { error: error.message, breakfast_id: req.params.id });
-    res.status(500).json({ error: 'Failed to fetch breakfast options' });
+    res.status(500).json({ error: 'Failed to fetch breakfast options', details: error.message });
+  }
+});
+
+// Submit breakfast rating
+router.post('/breakfast-ratings', [
+  require('express-validator').body('breakfast_id').isInt({ min: 1 }).withMessage('Valid breakfast ID is required'),
+  require('express-validator').body('rating').isInt({ min: 1, max: 5 }).withMessage('Rating must be between 1 and 5'),
+], async (req, res) => {
+  const errors = require('express-validator').validationResult(req);
+  if (!errors.isEmpty()) {
+    logger.warn('Validation errors for breakfast rating', { errors: errors.array() });
+    return res.status(400).json({ errors: errors.array() });
+  }
+  const { breakfast_id, rating } = req.body;
+  const sessionId = req.sessionID || null; // Allow null session ID
+  try {
+    const [breakfast] = await db.query('SELECT id FROM breakfasts WHERE id = ?', [breakfast_id]);
+    if (breakfast.length === 0) {
+      logger.warn('Breakfast not found for rating', { breakfast_id });
+      return res.status(404).json({ error: 'Breakfast not found' });
+    }
+    // Only check for existing rating if sessionId is not null
+    if (sessionId) {
+      const [existingRating] = await db.query(
+        'SELECT id FROM breakfast_ratings WHERE breakfast_id = ? AND session_id = ?',
+        [breakfast_id, sessionId]
+      );
+      if (existingRating.length > 0) {
+        logger.warn('Rating already exists for this breakfast in session', { breakfast_id, sessionId });
+        return res.status(400).json({ error: 'You have already rated this breakfast' });
+      }
+    }
+    const [result] = await db.query(
+      'INSERT INTO breakfast_ratings (breakfast_id, rating, session_id, created_at) VALUES (?, ?, ?, NOW())',
+      [breakfast_id, rating, sessionId]
+    );
+    await db.query(
+      `UPDATE breakfasts
+       SET average_rating = (SELECT AVG(rating) FROM breakfast_ratings WHERE breakfast_id = ?),
+           review_count = (SELECT COUNT(*) FROM breakfast_ratings WHERE breakfast_id = ?)
+       WHERE id = ?`,
+      [breakfast_id, breakfast_id, breakfast_id]
+    );
+    logger.info('Breakfast rating submitted', { id: result.insertId, breakfast_id, rating, sessionId });
+    res.status(201).json({ message: 'Breakfast rating submitted', id: result.insertId });
+  } catch (error) {
+    logger.error('Error submitting breakfast rating', { error: error.message, breakfast_id, rating, sessionId });
+    res.status(500).json({ error: 'Failed to submit breakfast rating', details: error.message });
+  }
+});
+
+// Fetch ratings by breakfast
+router.get('/breakfast-ratings', [
+  require('express-validator').query('breakfast_id').isInt({ min: 1 }).withMessage('Valid breakfast ID is required'),
+], async (req, res) => {
+  const errors = require('express-validator').validationResult(req);
+  if (!errors.isEmpty()) {
+    logger.warn('Validation errors for fetching breakfast ratings', { errors: errors.array() });
+    return res.status(400).json({ errors: errors.array() });
+  }
+  const { breakfast_id } = req.query;
+  const sessionId = req.sessionID || null; // Allow null session ID
+  try {
+    const query = sessionId
+      ? 'SELECT id, breakfast_id, rating, created_at FROM breakfast_ratings WHERE breakfast_id = ? AND session_id = ?'
+      : 'SELECT id, breakfast_id, rating, created_at FROM breakfast_ratings WHERE breakfast_id = ? AND session_id IS NULL';
+    const params = sessionId ? [breakfast_id, sessionId] : [breakfast_id];
+    const [rows] = await db.query(query, params);
+    logger.info('Breakfast ratings fetched successfully', { breakfast_id, sessionId, count: rows.length });
+    res.json(rows);
+  } catch (error) {
+    logger.error('Error fetching breakfast ratings', { error: error.message, breakfast_id, sessionId });
+    res.status(500).json({ error: 'Failed to fetch breakfast ratings', details: error.message });
   }
 });
 
