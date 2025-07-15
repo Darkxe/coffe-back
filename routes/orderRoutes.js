@@ -134,36 +134,34 @@ module.exports = (io) => {
           }
           let expectedPrice = parseFloat(breakfast[0].price);
 
-          if (option_ids && Array.isArray(option_ids)) {
-            const [groups] = await db.query('SELECT id FROM breakfast_option_groups WHERE breakfast_id = ?', [breakfast_id]);
-            if (groups.length > 0) {
-              const [options] = await db.query(
-                'SELECT id, group_id, additional_price FROM breakfast_options WHERE breakfast_id = ? AND id IN (?)',
-                [breakfast_id, option_ids]
-              );
-              if (options.length !== option_ids.length) {
-                logger.warn('Invalid breakfast options', { breakfast_id, option_ids, sessionId, timestamp });
-                return res.status(400).json({ error: `Invalid option IDs for breakfast ${breakfast_id}` });
-              }
-              const selectedGroups = new Set(options.map(opt => opt.group_id));
-              if (selectedGroups.size !== groups.length) {
-                logger.warn('Missing options for groups', { breakfast_id, selectedGroups: [...selectedGroups], groupCount: groups.length, sessionId });
-                return res.status(400).json({ error: `Must select one option from each of the ${groups.length} option groups for breakfast ${breakfast_id}` });
-              }
-              const optionPrice = options.reduce((sum, opt) => sum + parseFloat(opt.additional_price || 0), 0);
-              expectedPrice += optionPrice;
-            } else if (option_ids.length > 0) {
-              logger.warn('Options provided but no groups exist', { breakfast_id, option_ids, sessionId, timestamp });
-              return res.status(400).json({ error: `No option groups defined for breakfast ${breakfast_id}, but options provided` });
+          // Fetch option groups for the breakfast
+          const [groups] = await db.query('SELECT id, is_required FROM breakfast_option_groups WHERE breakfast_id = ?', [breakfast_id]);
+
+          if (option_ids && Array.isArray(option_ids) && option_ids.length > 0) {
+            const [options] = await db.query(
+              'SELECT id, group_id, additional_price FROM breakfast_options WHERE breakfast_id = ? AND id IN (?)',
+              [breakfast_id, option_ids]
+            );
+            if (options.length !== option_ids.length) {
+              logger.warn('Invalid breakfast options', { breakfast_id, option_ids, sessionId, timestamp });
+              return res.status(400).json({ error: `Invalid option IDs for breakfast ${breakfast_id}` });
             }
-          } else if (option_ids && !Array.isArray(option_ids)) {
-            logger.warn('Invalid option_ids format', { breakfast_id, option_ids, sessionId, timestamp });
-            return res.status(400).json({ error: `Option IDs for breakfast ${breakfast_id} must be an array` });
-          } else {
-            const [groups] = await db.query('SELECT id FROM breakfast_option_groups WHERE breakfast_id = ?', [breakfast_id]);
-            if (groups.length > 0) {
-              logger.warn('No options provided but groups exist', { breakfast_id, groupCount: groups.length, sessionId, timestamp });
-              return res.status(400).json({ error: `Must select one option from each of the ${groups.length} option groups for breakfast ${breakfast_id}` });
+            const selectedGroups = new Set(options.map(opt => opt.group_id));
+            // Check if all required groups are covered
+            const requiredGroups = groups.filter(g => g.is_required).map(g => g.id);
+            const missingRequiredGroups = requiredGroups.filter(g => !selectedGroups.has(g));
+            if (missingRequiredGroups.length > 0) {
+              logger.warn('Missing required options', { breakfast_id, missingGroups: missingRequiredGroups, sessionId, timestamp });
+              return res.status(400).json({ error: `Must select one option from each required option group for breakfast ${breakfast_id}` });
+            }
+            const optionPrice = options.reduce((sum, opt) => sum + parseFloat(opt.additional_price || 0), 0);
+            expectedPrice += optionPrice;
+          } else if (groups.length > 0) {
+            // Check if any groups are required
+            const requiredGroups = groups.filter(g => g.is_required);
+            if (requiredGroups.length > 0) {
+              logger.warn('No options provided but required groups exist', { breakfast_id, requiredGroupCount: requiredGroups.length, sessionId, timestamp });
+              return res.status(400).json({ error: `Must select one option from each of the ${requiredGroups.length} required option groups for breakfast ${breakfast_id}` });
             }
           }
 
@@ -282,7 +280,7 @@ module.exports = (io) => {
               [orderId, breakfast_id, quantity, unit_price]
             );
             const orderItemId = orderItemResult.insertId;
-            if (option_ids && Array.isArray(option_ids)) {
+            if (option_ids && Array.isArray(option_ids) && option_ids.length > 0) {
               for (const optionId of option_ids) {
                 await connection.query(
                   'INSERT INTO breakfast_order_options (order_item_id, breakfast_option_id) VALUES (?, ?)',
@@ -409,7 +407,7 @@ module.exports = (io) => {
         FROM orders o
         LEFT JOIN order_items oi ON o.id = oi.order_id
         LEFT JOIN menu_items mi ON oi.item_id = mi.id
-        LEFT JOIN menu_item_supplements mis ON oi.supplement_id = mis.supplement_id AND oi.item_id = mis.menu_item_id
+        LEFT JOIN menu_item_supplements mis ON oi.supplement_id = mis.supplement_id AND oi.item_id = mi.id
         LEFT JOIN breakfasts b ON oi.breakfast_id = b.id
         LEFT JOIN breakfast_order_options boo ON oi.id = boo.order_item_id
         LEFT JOIN breakfast_options bo ON boo.breakfast_option_id = bo.id
@@ -486,7 +484,7 @@ module.exports = (io) => {
         FROM orders o
         LEFT JOIN order_items oi ON o.id = oi.order_id
         LEFT JOIN menu_items mi ON oi.item_id = mi.id
-        LEFT JOIN menu_item_supplements mis ON oi.supplement_id = mis.supplement_id AND oi.item_id = mis.menu_item_id
+        LEFT JOIN menu_item_supplements mis ON oi.supplement_id = mis.supplement_id AND oi.item_id = mi.id
         LEFT JOIN breakfasts b ON oi.breakfast_id = b.id
         LEFT JOIN breakfast_order_options boo ON oi.id = boo.order_item_id
         LEFT JOIN breakfast_options bo ON boo.breakfast_option_id = bo.id
@@ -558,7 +556,7 @@ module.exports = (io) => {
         FROM orders o
         LEFT JOIN order_items oi ON o.id = oi.order_id
         LEFT JOIN menu_items mi ON oi.item_id = mi.id
-        LEFT JOIN menu_item_supplements mis ON oi.supplement_id = mis.supplement_id AND oi.item_id = mis.menu_item_id
+        LEFT JOIN menu_item_supplements mis ON oi.supplement_id = mis.supplement_id AND oi.item_id = mi.id
         LEFT JOIN breakfasts b ON oi.breakfast_id = b.id
         LEFT JOIN breakfast_order_options boo ON oi.id = boo.order_item_id
         LEFT JOIN breakfast_options bo ON boo.breakfast_option_id = bo.id
@@ -626,7 +624,7 @@ module.exports = (io) => {
         FROM orders o
         LEFT JOIN order_items oi ON o.id = oi.order_id
         LEFT JOIN menu_items mi ON oi.item_id = mi.id
-        LEFT JOIN menu_item_supplements mis ON oi.supplement_id = mis.supplement_id AND oi.item_id = mis.menu_item_id
+        LEFT JOIN menu_item_supplements mis ON oi.supplement_id = mis.supplement_id AND oi.item_id = mi.id
         LEFT JOIN breakfasts b ON oi.breakfast_id = b.id
         LEFT JOIN breakfast_order_options boo ON oi.id = boo.order_item_id
         LEFT JOIN breakfast_options bo ON boo.breakfast_option_id = bo.id
