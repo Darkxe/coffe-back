@@ -16,7 +16,7 @@ const checkAdminOrServer = async (userId) => {
 
 module.exports = (io) => {
   router.post('/orders', async (req, res) => {
-    const { items, breakfastItems, total_price, order_type, delivery_address, promotion_id, table_id, request_id } = req.body;
+    const { items, breakfastItems, total_price, order_type, delivery_address, promotion_id, table_id, request_id, notes } = req.body;
     const sessionId = req.headers['x-session-id'] || req.sessionID;
     const timestamp = new Date().toISOString();
 
@@ -28,6 +28,7 @@ module.exports = (io) => {
       supplements: items?.map(i => ({ item_id: i.item_id, supplement_id: i.supplement_id })) || [],
       sessionId,
       timestamp,
+      notes,
     });
 
     try {
@@ -38,7 +39,7 @@ module.exports = (io) => {
 
       const orderHash = crypto
         .createHash('sha256')
-        .update(JSON.stringify({ items, breakfastItems, table_id, order_type, total_price, sessionId }))
+        .update(JSON.stringify({ items, breakfastItems, table_id, order_type, total_price, sessionId, notes }))
         .digest('hex');
       if (recentRequests.has(orderHash)) {
         logger.warn('Duplicate order submission detected', { sessionId, orderHash, timestamp });
@@ -134,7 +135,6 @@ module.exports = (io) => {
           }
           let expectedPrice = parseFloat(breakfast[0].price);
 
-          // Fetch option groups for the breakfast
           const [groups] = await db.query('SELECT id, is_required FROM breakfast_option_groups WHERE breakfast_id = ?', [breakfast_id]);
 
           if (option_ids && Array.isArray(option_ids) && option_ids.length > 0) {
@@ -147,7 +147,6 @@ module.exports = (io) => {
               return res.status(400).json({ error: `Invalid option IDs for breakfast ${breakfast_id}` });
             }
             const selectedGroups = new Set(options.map(opt => opt.group_id));
-            // Check if all required groups are covered
             const requiredGroups = groups.filter(g => g.is_required).map(g => g.id);
             const missingRequiredGroups = requiredGroups.filter(g => !selectedGroups.has(g));
             if (missingRequiredGroups.length > 0) {
@@ -157,7 +156,6 @@ module.exports = (io) => {
             const optionPrice = options.reduce((sum, opt) => sum + parseFloat(opt.additional_price || 0), 0);
             expectedPrice += optionPrice;
           } else if (groups.length > 0) {
-            // Check if any groups are required
             const requiredGroups = groups.filter(g => g.is_required);
             if (requiredGroups.length > 0) {
               logger.warn('No options provided but required groups exist', { breakfast_id, requiredGroupCount: requiredGroups.length, sessionId, timestamp });
@@ -259,8 +257,8 @@ module.exports = (io) => {
 
       try {
         const [orderResult] = await connection.query(
-          'INSERT INTO orders (total_price, order_type, delivery_address, promotion_id, table_id, session_id) VALUES (?, ?, ?, ?, ?, ?)',
-          [calculatedTotal, order_type, delivery_address || null, promotion_id || null, table_id || null, sessionId]
+          'INSERT INTO orders (total_price, order_type, delivery_address, promotion_id, table_id, session_id, notes) VALUES (?, ?, ?, ?, ?, ?, ?)',
+          [calculatedTotal, order_type, delivery_address || null, promotion_id || null, table_id || null, sessionId, notes || null]
         );
         const orderId = orderResult.insertId;
 
@@ -364,6 +362,7 @@ module.exports = (io) => {
           notificationId,
           sessionId,
           timestamp,
+          notes,
         });
         res.status(201).json({ message: 'Order created', orderId });
       } catch (err) {
