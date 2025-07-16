@@ -135,17 +135,28 @@ module.exports = (io) => {
           }
           let expectedPrice = parseFloat(breakfast[0].price);
 
+          // Fetch valid option groups and ensure they have associated options
           const [groups] = await db.query(
-            `SELECT bog.id, bog.is_required
+            `SELECT DISTINCT bog.id, bog.is_required, bog.title
              FROM breakfast_option_groups bog
-             WHERE bog.breakfast_id = ?
+             LEFT JOIN breakfast_options bo ON bo.group_id = bog.id
+             WHERE bog.breakfast_id = ? AND bo.id IS NOT NULL
              UNION
-             SELECT bog.id, bog.is_required
+             SELECT DISTINCT bog.id, bog.is_required, bog.title
              FROM breakfast_option_groups bog
              INNER JOIN breakfast_option_group_mappings bogm ON bog.id = bogm.option_group_id
-             WHERE bogm.breakfast_id = ? AND bog.breakfast_id IS NULL`,
+             LEFT JOIN breakfast_options bo ON bo.group_id = bog.id
+             WHERE bogm.breakfast_id = ? AND bog.breakfast_id IS NULL AND bo.id IS NOT NULL`,
             [breakfast_id, breakfast_id]
           );
+
+          logger.info('Fetched option groups for breakfast', {
+            breakfast_id,
+            groupCount: groups.length,
+            requiredGroups: groups.filter(g => g.is_required).map(g => ({ id: g.id, title: g.title })),
+            sessionId,
+            timestamp
+          });
 
           if (option_ids && Array.isArray(option_ids) && option_ids.length > 0) {
             const [options] = await db.query(
@@ -172,14 +183,19 @@ module.exports = (io) => {
             const requiredGroups = groups.filter(g => g.is_required).map(g => g.id);
             const missingRequiredGroups = requiredGroups.filter(g => !selectedGroups.has(g));
             if (missingRequiredGroups.length > 0) {
+              const missingGroupTitles = groups
+                .filter(g => missingRequiredGroups.includes(g.id))
+                .map(g => g.title || `Group ${g.id}`)
+                .join(', ');
               logger.warn('Missing required options', {
                 breakfast_id,
                 missingGroups: missingRequiredGroups,
+                missingGroupTitles,
                 sessionId,
                 timestamp
               });
               return res.status(400).json({
-                error: `Must select one option from each required option group for breakfast ${breakfast_id}. Missing groups: [${missingRequiredGroups.join(', ')}]`
+                error: `Must select one option from each required option group for breakfast ${breakfast_id}. Missing groups: [${missingGroupTitles}]`
               });
             }
             const optionPrice = options.reduce((sum, opt) => sum + parseFloat(opt.additional_price || 0), 0);
@@ -187,15 +203,16 @@ module.exports = (io) => {
           } else if (groups.length > 0) {
             const requiredGroups = groups.filter(g => g.is_required);
             if (requiredGroups.length > 0) {
+              const requiredGroupTitles = requiredGroups.map(g => g.title || `Group ${g.id}`).join(', ');
               logger.warn('No options provided but required groups exist', {
                 breakfast_id,
                 requiredGroupCount: requiredGroups.length,
-                requiredGroupIds: requiredGroups.map(g => g.id),
+                requiredGroupTitles,
                 sessionId,
                 timestamp
               });
               return res.status(400).json({
-                error: `Must select one option from each of the ${requiredGroups.length} required option groups for breakfast ${breakfast_id}. Required groups: [${requiredGroups.map(g => g.id).join(', ')}]`
+                error: `Must select one option from each of the ${requiredGroups.length} required option groups for breakfast ${breakfast_id}. Required groups: [${requiredGroupTitles}]`
               });
             }
           }
