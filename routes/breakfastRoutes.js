@@ -593,7 +593,7 @@ router.get('/breakfasts/:id/option-groups', breakfastValidation, async (req, res
          WHERE bogm.breakfast_id = ? AND bog.breakfast_id IS NULL`,
         [breakfastId]
     );
-    const allGroups = [...specificGroups, ...reusableableGroups];
+    const allGroups = [...specificGroups, ...reusableGroups];
     res.json(allGroups);
   } catch (error) {
     logger.error('Error fetching option groups', { error: error.message, breakfast_id: req.params.id });
