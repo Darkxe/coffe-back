@@ -629,6 +629,7 @@ router.post('/option-groups/reusable', checkAdmin, breakfastValidation, upload, 
       [title.trim(), parsedIsRequired, parsedMaxSelections]
     );
     const groupId = result.insertId;
+    logger.debug('Created group with ID', { groupId });
     if (parsedOptions.length > 0) {
       for (const option of parsedOptions) {
         if (!option.option_type?.trim() || !option.option_name?.trim()) {
@@ -637,10 +638,10 @@ router.post('/option-groups/reusable', checkAdmin, breakfastValidation, upload, 
           return res.status(400).json({ error: 'Each option must have a non-empty option_type and option_name' });
         }
         const parsedPrice = parseFloat(option.additional_price) || 0;
-        await connection.query(
-          'INSERT INTO breakfast_options (breakfast_id, group_id, option_type, option_name, additional_price, created_at, updated_at) VALUES (NULL, ?, ?, ?, ?, NOW(), NOW())',
-          [groupId, option.option_type.trim(), option.option_name.trim(), parsedPrice]
-        );
+        const query = 'INSERT INTO breakfast_options (breakfast_id, group_id, option_type, option_name, additional_price, created_at, updated_at) VALUES (NULL, ?, ?, ?, ?, NOW(), NOW())';
+        const params = [groupId, option.option_type.trim(), option.option_name.trim(), parsedPrice];
+        logger.debug('Executing option insert', { query, params });
+        await connection.query(query, params);
       }
     }
     await connection.commit();
@@ -704,10 +705,10 @@ router.put('/option-groups/reusable/:id', checkAdmin, breakfastValidation, uploa
           return res.status(400).json({ error: 'Each option must have a non-empty option_type and option_name' });
         }
         const parsedPrice = parseFloat(option.additional_price) || 0;
-        await connection.query(
-          'INSERT INTO breakfast_options (breakfast_id, group_id, option_type, option_name, additional_price, created_at, updated_at) VALUES (NULL, ?, ?, ?, ?, NOW(), NOW())',
-          [groupId, option.option_type.trim(), option.option_name.trim(), parsedPrice]
-        );
+        const query = 'INSERT INTO breakfast_options (breakfast_id, group_id, option_type, option_name, additional_price, created_at, updated_at) VALUES (NULL, ?, ?, ?, ?, NOW(), NOW())';
+        const params = [groupId, option.option_type.trim(), option.option_name.trim(), parsedPrice];
+        logger.debug('Executing option insert', { query, params });
+        await connection.query(query, params);
       }
     }
     await connection.commit();
