@@ -135,7 +135,6 @@ module.exports = (io) => {
           }
           let expectedPrice = parseFloat(breakfast[0].price);
 
-          // Fetch valid option groups and ensure they have associated options
           const [groups] = await db.query(
             `SELECT DISTINCT bog.id, bog.is_required, bog.title
              FROM breakfast_option_groups bog
@@ -311,8 +310,8 @@ module.exports = (io) => {
 
       try {
         const [orderResult] = await connection.query(
-          'INSERT INTO orders (total_price, order_type, delivery_address, promotion_id, table_id, session_id, notes) VALUES (?, ?, ?, ?, ?, ?, ?)',
-          [calculatedTotal, order_type, delivery_address || null, promotion_id || null, table_id || null, sessionId, notes || null]
+          'INSERT INTO orders (total_price, order_type, delivery_address, promotion_id, table_id, session_id, notes, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+          [calculatedTotal, order_type, delivery_address || null, promotion_id || null, table_id || null, sessionId, notes || null, 'pending']
         );
         const orderId = orderResult.insertId;
 
@@ -498,6 +497,7 @@ module.exports = (io) => {
       const formattedRows = rows.map(row => ({
         ...row,
         approved: Number(row.approved),
+        status: row.status || 'pending',
       }));
 
       logger.info('Orders fetched successfully', { count: rows.length, time_range, approved, sessionId, timestamp });
@@ -552,6 +552,7 @@ module.exports = (io) => {
       }
 
       rows[0].approved = Number(rows[0].approved);
+      rows[0].status = rows[0].status || 'pending';
 
       logger.info('Order fetched successfully', { orderId, sessionId, timestamp });
       res.json(rows[0]);
@@ -584,13 +585,13 @@ module.exports = (io) => {
         return res.status(400).json({ error: 'Invalid approved value' });
       }
 
-      const [orderRows] = await db.query('SELECT session_id, approved FROM orders WHERE id = ?', [orderId]);
+      const [orderRows] = await db.query('SELECT session_id, approved, status FROM orders WHERE id = ?', [orderId]);
       if (orderRows.length === 0) {
         logger.warn('Order not found', { orderId, sessionId, timestamp });
         return res.status(404).json({ error: 'Order not found' });
       }
 
-      await db.query('UPDATE orders SET approved = ? WHERE id = ?', [approved, orderId]);
+      await db.query('UPDATE orders SET approved = ?, status = ? WHERE id = ?', [approved, approved ? 'preparing' : orderRows[0].status, orderId]);
 
       const [orderDetails] = await db.query(`
         SELECT o.*, t.table_number,
@@ -619,13 +620,13 @@ module.exports = (io) => {
       `, [orderId]);
 
       orderDetails[0].approved = Number(orderDetails[0].approved);
-      const derivedStatus = orderDetails[0].approved ? 'received' : 'pending';
+      const derivedStatus = orderDetails[0].status || (orderDetails[0].approved ? 'preparing' : 'pending');
 
       const guestSessionId = orderRows[0].session_id;
       io.to(`guest-${guestSessionId}`).emit('orderApproved', { orderId: orderId.toString(), status: derivedStatus, orderDetails: orderDetails[0] });
       io.to('staff-notifications').emit('orderApproved', { orderId: orderId.toString(), status: derivedStatus, orderDetails: orderDetails[0] });
 
-      logger.info('Order status updated successfully', { orderId, approved, sessionId, timestamp });
+      logger.info('Order status updated successfully', { orderId, approved, status: derivedStatus, sessionId, timestamp });
       res.status(200).json({ message: 'Order status updated' });
     } catch (err) {
       logger.error('Error processing order update', { error: err.message, orderId: id, sessionId, timestamp });
@@ -648,17 +649,17 @@ module.exports = (io) => {
         logger.warn('Invalid order ID for approval', { id, sessionId, timestamp });
         return res.status(400).json({ error: 'Valid order ID required' });
       }
-      const [orderRows] = await db.query('SELECT session_id, approved FROM orders WHERE id = ?', [orderId]);
+      const [orderRows] = await db.query('SELECT session_id, approved, status FROM orders WHERE id = ?', [orderId]);
       if (orderRows.length === 0) {
         logger.warn('Order not found for approval', { orderId, sessionId, timestamp });
         return res.status(404).json({ error: 'Order not found' });
       }
-      if (orderRows[0].approved) {
-        logger.warn('Order already approved', { orderId, sessionId, timestamp });
-        return res.status(400).json({ error: 'Order already approved' });
+      if (orderRows[0].approved && orderRows[0].status !== 'cancelled') {
+        logger.warn('Order already approved and not cancelled', { orderId, sessionId, timestamp });
+        return res.status(400).json({ error: 'Order already approved and not cancelled' });
       }
 
-      await db.query('UPDATE orders SET approved = 1 WHERE id = ?', [orderId]);
+      await db.query('UPDATE orders SET approved = 1, status = ? WHERE id = ?', ['preparing', orderId]);
 
       const [orderDetails] = await db.query(`
         SELECT o.*, t.table_number,
@@ -687,7 +688,7 @@ module.exports = (io) => {
       `, [orderId]);
 
       orderDetails[0].approved = Number(orderDetails[0].approved);
-      const derivedStatus = orderDetails[0].approved ? 'received' : 'pending';
+      const derivedStatus = orderDetails[0].status || 'preparing';
 
       const guestSessionId = orderRows[0].session_id;
       io.to(`guest-${guestSessionId}`).emit('orderApproved', { orderId: orderId.toString(), status: derivedStatus, orderDetails: orderDetails[0] });
@@ -698,6 +699,74 @@ module.exports = (io) => {
     } catch (err) {
       logger.error('Error approving order', { error: err.message, orderId: id, sessionId, timestamp });
       res.status(500).json({ error: 'Failed to approve order' });
+    }
+  });
+
+  router.post('/orders/:id/cancel', async (req, res) => {
+    const { id } = req.params;
+    const timestamp = new Date().toISOString();
+    const sessionId = req.headers['x-session-id'] || req.sessionID;
+
+    try {
+      if (!req.user || !await checkAdminOrServer(req.user.id)) {
+        logger.warn('Unauthorized attempt to cancel order', { authenticatedUser: req.user, sessionId, timestamp });
+        return res.status(403).json({ error: 'Admin or server access required' });
+      }
+      const orderId = parseInt(id);
+      if (isNaN(orderId) || orderId <= 0) {
+        logger.warn('Invalid order ID for cancellation', { id, sessionId, timestamp });
+        return res.status(400).json({ error: 'Valid order ID required' });
+      }
+      const [orderRows] = await db.query('SELECT session_id, status FROM orders WHERE id = ?', [orderId]);
+      if (orderRows.length === 0) {
+        logger.warn('Order not found for cancellation', { orderId, sessionId, timestamp });
+        return res.status(404).json({ error: 'Order not found' });
+      }
+      if (orderRows[0].status === 'cancelled') {
+        logger.warn('Order already cancelled', { orderId, sessionId, timestamp });
+        return res.status(400).json({ error: 'Order already cancelled' });
+      }
+
+      await db.query('UPDATE orders SET status = ?, approved = 0 WHERE id = ?', ['cancelled', orderId]);
+
+      const [orderDetails] = await db.query(`
+        SELECT o.*, t.table_number,
+               GROUP_CONCAT(oi.item_id) AS item_ids,
+               GROUP_CONCAT(CASE WHEN oi.item_id IS NOT NULL THEN oi.quantity END) AS menu_quantities,
+               GROUP_CONCAT(mi.name) AS item_names, GROUP_CONCAT(mi.image_url) AS image_urls,
+               GROUP_CONCAT(oi.unit_price) AS unit_prices, GROUP_CONCAT(oi.supplement_id) AS supplement_ids,
+               GROUP_CONCAT(mis.name) AS supplement_names, GROUP_CONCAT(mis.additional_price) AS supplement_prices,
+               GROUP_CONCAT(DISTINCT oi.breakfast_id) AS breakfast_ids,
+               GROUP_CONCAT(CASE WHEN oi.breakfast_id IS NOT NULL THEN oi.quantity END) AS breakfast_quantities,
+               GROUP_CONCAT(DISTINCT b.name) AS breakfast_names,
+               GROUP_CONCAT(DISTINCT b.image_url) AS breakfast_images,
+               GROUP_CONCAT(boo.breakfast_option_id) AS breakfast_option_ids,
+               GROUP_CONCAT(bo.option_name) AS breakfast_option_names,
+               GROUP_CONCAT(bo.additional_price) AS breakfast_option_prices
+        FROM orders o
+        LEFT JOIN order_items oi ON o.id = oi.order_id
+        LEFT JOIN menu_items mi ON oi.item_id = mi.id
+        LEFT JOIN menu_item_supplements mis ON oi.supplement_id = mis.supplement_id AND oi.item_id = mi.id
+        LEFT JOIN breakfasts b ON oi.breakfast_id = b.id
+        LEFT JOIN breakfast_order_options boo ON oi.id = boo.order_item_id
+        LEFT JOIN breakfast_options bo ON boo.breakfast_option_id = bo.id
+        LEFT JOIN tables t ON o.table_id = t.id
+        WHERE o.id = ?
+        GROUP BY o.id
+      `, [orderId]);
+
+      orderDetails[0].approved = Number(orderDetails[0].approved);
+      const derivedStatus = orderDetails[0].status || 'cancelled';
+
+      const guestSessionId = orderRows[0].session_id;
+      io.to(`guest-${guestSessionId}`).emit('orderCancelled', { orderId: orderId.toString(), status: derivedStatus, orderDetails: orderDetails[0] });
+      io.to('staff-notifications').emit('orderCancelled', { orderId: orderId.toString(), status: derivedStatus, orderDetails: orderDetails[0] });
+
+      logger.info('Order cancelled successfully', { orderId, guestSessionId, sessionId, timestamp });
+      res.status(200).json({ message: 'Order cancelled' });
+    } catch (err) {
+      logger.error('Error cancelling order', { error: err.message, orderId: id, sessionId, timestamp });
+      res.status(500).json({ error: 'Failed to cancel order' });
     }
   });
 
